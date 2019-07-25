@@ -8,6 +8,8 @@ import random
 import string
 
 #Portable HTTP server to demonstrate web vulnerabilities
+# - CSTI - /csti
+# - SQLi (sqlite3) - /sql
 #Author - Cary Hooper @nopantrootdance
 #Change these configs:
 log_file_path = ''
