@@ -1,19 +1,16 @@
 #!/usr/bin/python3
-import os
+import os,base64,random
 import cherrypy
-import base64
-import re
 import sqlite3
-import html
-import random
-import string
 #Portable HTTP server to demonstrate web vulnerabilities
 #Author - Cary Hooper @nopantrootdance
+#Todo: Blind SQLi, XXE, 2nd order SQLi, Vue template injection, React injection? 
+#Todo: consolidate like functionality into functions or classes.  
 
 #To begin, run the following commands:
 #1) pip install -r requirements.txt
 #2) python3 vulndemoserver.py
-#3) Navigate to http://127.0.0.1:31337 (warning, by default this binds to all interaces)
+#3) Navigate to http://127.0.0.1:31337
 #4) Happy hacking!
 
 #Change these configs:
@@ -21,8 +18,8 @@ log_file_path = ''
 webroot = 'wwwroot/'
 PATH = os.path.abspath(webroot)
 port = 31337
-#For better security, change this to: socket_host = "127.0.0.1"
-socket_host = "0.0.0.0"
+#To bind on all porta, change this to: socket_host = "0.0.0.0"
+socket_host = "127.0.0.1"
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
@@ -51,7 +48,7 @@ def secureheaders():
 	headers = cherrypy.response.headers
 	headers["X-Frame-Options"] = "DENY"
 	headers["X-XSS-Protection"] = "1; mode=block"
-	headers["Content-Security-Policy"] = "script-src 'self' 'unsafe-inline'"
+	headers["Content-Security-Policy"] = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 	headers["Cache-Control"] = "no-cache, no-store"
 	headers["Expires"] = "0"
 	headers["Pragma"] = "no-cache"
@@ -103,7 +100,7 @@ cstiPreamble = """
     <br>
     """
 
-sqlPreamble1 = """
+sqlPreamble = """
 <!DOCTYPE html>
 <html>
 <head><title>SQLi Demo</title></head>
@@ -111,9 +108,10 @@ sqlPreamble1 = """
     <br><br>
     <h1>Welcome to PWN Depot</h1>
     <h4>Where you can buy just about anything...</h4>
+    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
     <img src="../pwndepot.png" height="10%" width="10%">
     <br><br><!-- """
-sqlPreamble2 = """-->
+sqlPreamble1 = """-->
     <form action="/pwndepot" method="get">
     <div>
         <label for="search">Search:</label>
@@ -131,7 +129,61 @@ sqlPreamble2 = """-->
         <th><u>Quantity</u></th>   
     </tr>
 """
+sqlPreamble2 = """-->
+    <form action="/pwndepot2" method="get">
+    <div>
+        <label for="search">Search:</label>
+        <input type="text" id="search" name="search">
+        <input type="submit" value="Go">
+    </div>
+    <div>
+        <br><label>Example: saw</label>
+    </div><br><br><br>
+</form>
+<table class="table table-bordered" style='width:100%'>
+    <tr align="left">
+        <th><u>Item</u></th>
+        <th><u>Price</u></th>
+        <th><u>Quantity</u></th>   
+    </tr>
+"""
+sqlPreamble3 = """-->
+    <form action="/pwndepot3" method="get">
+    <div>
+        <label for="search">Search:</label>
+        <input type="text" id="search" name="search">
+        <input type="submit" value="Go">
+    </div>
+    <div>
+        <br><label>Example: saw</label>
+    </div><br><br><br>
+</form>
+<table class="table table-bordered" style='width:100%'>
+    <tr align="left">
+        <th><u>Item</u></th>
+        <th><u>Price</u></th>
+        <th><u>Quantity</u></th>   
+    </tr>
+"""
 
+sqlPreamble4 = """-->
+    <form action="/pwndepot4" method="get">
+    <div>
+        <label for="search">Search:</label>
+        <input type="text" id="search" name="search">
+        <input type="submit" value="Go">
+    </div>
+    <div>
+        <br><label>Example: saw</label>
+    </div><br><br><br>
+</form>
+<table class="table table-bordered" style='width:100%'>
+    <tr align="left">
+        <th><u>Item</u></th>
+        <th><u>Price</u></th>
+        <th><u>Quantity</u></th>   
+    </tr>
+"""
 class PwnDepot(object):
 #DEMO - Simple XSS
 #Goal: Invoke JavaScript through XSS within a GET parameter
@@ -163,9 +215,28 @@ class PwnDepot(object):
 		if h00p == None:
 			response = "<br>Error: h00p is not defined<br>"
 		else:
-			for badchar in ['"','\'',' ']:
-				if badchar in h00p:
-					response = "Character not allowed ( \" , ' , space).<br>"
+			for badchar in ['script','onload','img']:
+				if badchar in h00p.lower():
+					response = "String not allowed (script,onload,img).<br>"
+					evilflag = 1
+			if evilflag != 1:
+				response = "Hello " + h00p + "<br>"
+		return cstiPreamble + response
+
+#DEMO - Simple XSS 3
+#Goal: Invoke JavaScript through XSS within a GET parameter
+	#Create aliases for the same path
+	pages = ['XSS3','CSS3','css3']
+	@cherrypy.expose(pages)
+	def xss3(self,h00p=None,**params):
+		evilflag = 0
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br>Error: h00p is not defined<br>"
+		else:
+			for badchar in ['\'','"',' ','(',')']:
+				if badchar in h00p.lower():
+					response = "Character not allowed (',\",space,()).<br>"
 					evilflag = 1
 			if evilflag != 1:
 				response = "Hello " + h00p + "<br>"
@@ -261,7 +332,7 @@ class PwnDepot(object):
 
 			#Output the page
 		goal = " Goal: dump the contents of the tools table to find the secret tools."
-		return sqlPreamble1 + goal + sqlPreamble2 + response
+		return sqlPreamble + goal + sqlPreamble2 + response
 
 #DEMO - SQL Injection 2
 #Level2 - Using a UNION attack, read the contents of another table.
@@ -327,7 +398,7 @@ class PwnDepot(object):
 
 			#Output the page
 		goal = " Goal: find the administrator password."
-		return sqlPreamble1 + goal + sqlPreamble2 + response
+		return sqlPreamble + goal + sqlPreamble2 + response
 
 
 #DEMO - SQL Injection 3
@@ -380,26 +451,98 @@ class PwnDepot(object):
 		#Search function
 		evilflag = 0
 		evilwords = ["select","SELECT","FROM","from","WHERE","where","UNION","union"]
+		response = ""
 		if search != None:
 			for evilword in evilwords:
-				if evilword not in search:			
-					print("Search is populated...")
-					response = ""
-					statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
-					cursor.execute(statement)
-					#print("Entries retrieved... " + str(len(cursor.fetchall())))
-					for i in cursor.fetchall():
-						response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
-					response += "</table></body></html>"
-					#print(response)
-				else:
+				if evilword in search:
+					evilflag = 1
 					response = "Mischief detected! SQL Injection attempt logged."
-		else:
-			response = ""
+
+			if evilflag == 0:
+				print("Search is populated...")
+
+				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				cursor.execute(statement)
+				for i in cursor.fetchall():
+					response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
+				response += "</table></body></html>"
 
 			#Output the page
-		goal = " Goal: find the administrator password."
-		return sqlPreamble1 + goal + sqlPreamble2 + response
+		goal = " Goal: bypass filters and find the administrator password."
+		return sqlPreamble + goal + sqlPreamble3 + response
+
+#DEMO - SQL Injection 4
+#Level4 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
+	pages = ['sql4','sqli4','store4']
+	@cherrypy.expose(pages)
+	def pwndepot4(self, search=None, **params):
+		tools = ["adze","Allen","wrench","anvil","axe","bellows","bevel","block","and","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench"]
+		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
+
+		#Try to connect to DB.  If it doesn't exist, it will create it.
+		conn = sqlite3.connect('tools.db')
+		cursor = conn.cursor()
+		#Try to create tables.  Throw exception if they already exist.
+		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
+
+		#Create and populate the TOOLS Table
+		if cursor.fetchone()[0] != 1:
+			print("\n\n\nCreating table: TOOLS\n\n\n")
+			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
+				TOOL TEXT NOT NULL,
+				PRICE INT NOT NULL,
+				QUANTITY INT NOT NULL);''')
+			primarykey = 0
+			print("\n\n\nFilling table: TOOLS\n\n\n")
+			for tool in tools:
+				price = random.randint(1,301)
+				qty = random.randint(0,1001)
+				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "'," + str(price) + "," + str(qty) + ")"
+				cursor.execute(statement)
+				primarykey += 1
+				conn.commit()
+
+			#Now create and populate the USERS table
+			cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
+			if cursor.fetchone()[0] != 1:
+				print("\n\n\nCreating table: USERS\n\n\n")
+				cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
+					USERNAME TEXT NOT NULL,
+					PASSWORD INT NOT NULL);
+					''')
+				primarykey = 0
+				print("\n\n\nFilling table: USERS\n\n\n")
+				for user in usernames:
+					statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
+					cursor.execute(statement)
+					primarykey += 1
+					conn.commit()
+
+		#Search function
+		evilflag = 0
+		evilwords = ["select","from","where","union"]
+		response = ""
+		if search != None:
+			for evilword in evilwords:
+				if evilword in search.lower():
+					evilflag = 1
+					response = "Mischief detected! Illegal word."
+				if " " in search.lower():
+					evilflag = 1
+					response = "Mischief detected! Illegal character."
+
+			if evilflag == 0:
+				print("Search is populated...")
+
+				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				cursor.execute(statement)
+				for i in cursor.fetchall():
+					response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
+				response += "</table></body></html>"
+
+			#Output the page
+		goal = " Goal: bypass filters and find the administrator password."
+		return sqlPreamble + goal + sqlPreamble4 + response
 
 cherrypy.tree.mount(PwnDepot(),'/', config=configval)
 
