@@ -8,12 +8,6 @@ import pdfkit
 #Todo: Blind SQLi, XXE, 2nd order SQLi, Vue template injection, React injection? 
 #Todo: consolidate like functionality into functions or classes.  
 
-#To begin, run the following commands:
-#1) pipenv install -r requirements.txt
-#2) pipenv run python vulndemoserver.py
-#3) Navigate to http://127.0.0.1:31337
-#4) Happy hacking!
-
 #Change these configs:
 log_file_path = ''
 if os.name == 'nt':
