@@ -2,20 +2,24 @@
 import os,base64,random
 import cherrypy
 import sqlite3
+import pdfkit
 #Portable HTTP server to demonstrate web vulnerabilities
 #Author - Cary Hooper @nopantrootdance
 #Todo: Blind SQLi, XXE, 2nd order SQLi, Vue template injection, React injection? 
 #Todo: consolidate like functionality into functions or classes.  
 
 #To begin, run the following commands:
-#1) pip install -r requirements.txt
-#2) python3 vulndemoserver.py
+#1) pipenv install -r requirements.txt
+#2) pipenv run python vulndemoserver.py
 #3) Navigate to http://127.0.0.1:31337
 #4) Happy hacking!
 
 #Change these configs:
 log_file_path = ''
-webroot = 'wwwroot/'
+if os.name == 'nt':
+	webroot = 'wwwroot\\'
+else:
+	webroot = 'wwwroot/'
 PATH = os.path.abspath(webroot)
 port = 31337
 #To bind on all porta, change this to: socket_host = "0.0.0.0"
@@ -27,7 +31,7 @@ configval = {
 		{
 		'tools.staticdir.on' : True,
 		'tools.staticdir.dir' : PATH,
-		'tools.staticdir.index' : webroot + 'index.html',
+		'tools.staticdir.index' : 'index.html',
 		'tools.caching.on' : False,
 		'tools.secureheaders.on' : True
 		},
@@ -46,7 +50,7 @@ def secureheaders():
 	#Thanks, to Andy (https://github.com/andyacer) for introducing me to CherryPy 
 	#and sharing his implementation 
 	headers = cherrypy.response.headers
-	headers["X-Frame-Options"] = "DENY"
+	#headers["X-Frame-Options"] = "DENY"
 	headers["X-XSS-Protection"] = "1; mode=block"
 	headers["Content-Security-Policy"] = "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 	headers["Cache-Control"] = "no-cache, no-store"
@@ -78,113 +82,83 @@ def create_connection(db_file):
 	finally:
 		conn.close()
 
-cstiPreamble = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>CSTI Demo</title>
-</head>
-<body ng-app="app" ng-controller="demo" bgcolor="#e0dcdc">
-    <h1>{{message}}</h1>
-    <text>XSS Me!</text>
-    <text>Goal: Invoke XSS within this webapp.</text>
-    <br><text>Site works best in Chrome</text>
-    <script src="angular.1.6.9.min.js"></script>
-    <script>
-        var app = angular.module('app',[]);
-        app.controller('demo', function demo($scope){
-            $scope.message="My First AngularJS App";
-        });
-    </script>
-    <br>
-    <br>
-    """
+sqlPreamble = """<!DOCTYPE html>
+	<html>
+	<head><title>SQLi Demo</title></head>
+	<body bgcolor="#e0dcdc">
+	    <br><br>
+	    <h1>Welcome to PWN Depot</h1>
+	    <h4>Where you can buy just about anything...</h4>
+	    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+	    <img src="../pwndepot.png" height="10%" width="10%">
+	    <br><br><!-- """
 
-sqlPreamble = """
-<!DOCTYPE html>
-<html>
-<head><title>SQLi Demo</title></head>
-<body bgcolor="#e0dcdc">
-    <br><br>
-    <h1>Welcome to PWN Depot</h1>
-    <h4>Where you can buy just about anything...</h4>
-    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
-    <img src="../pwndepot.png" height="10%" width="10%">
-    <br><br><!-- """
-sqlPreamble1 = """-->
-    <form action="/pwndepot" method="get">
-    <div>
-        <label for="search">Search:</label>
-        <input type="text" id="search" name="search">
-        <input type="submit" value="Go">
-    </div>
-    <div>
-        <br><label>Example: saw</label>
-    </div><br><br><br>
-</form>
-<table class="table table-bordered" style='width:100%'>
-    <tr align="left">
-        <th><u>Item</u></th>
-        <th><u>Price</u></th>
-        <th><u>Quantity</u></th>   
-    </tr>
-"""
-sqlPreamble2 = """-->
-    <form action="/pwndepot2" method="get">
-    <div>
-        <label for="search">Search:</label>
-        <input type="text" id="search" name="search">
-        <input type="submit" value="Go">
-    </div>
-    <div>
-        <br><label>Example: saw</label>
-    </div><br><br><br>
-</form>
-<table class="table table-bordered" style='width:100%'>
-    <tr align="left">
-        <th><u>Item</u></th>
-        <th><u>Price</u></th>
-        <th><u>Quantity</u></th>   
-    </tr>
-"""
-sqlPreamble3 = """-->
-    <form action="/pwndepot3" method="get">
-    <div>
-        <label for="search">Search:</label>
-        <input type="text" id="search" name="search">
-        <input type="submit" value="Go">
-    </div>
-    <div>
-        <br><label>Example: saw</label>
-    </div><br><br><br>
-</form>
-<table class="table table-bordered" style='width:100%'>
-    <tr align="left">
-        <th><u>Item</u></th>
-        <th><u>Price</u></th>
-        <th><u>Quantity</u></th>   
-    </tr>
-"""
+cstiPreamble = """<!DOCTYPE html>
+	<html>
+	<head>
+	    <title>CSTI Demo</title>
+	</head>
+	<body ng-app="app" ng-controller="demo" bgcolor="#e0dcdc">
+	    <h1>{{message}}</h1>
+	    <text>XSS Me!</text>
+	    <text>Goal: Invoke XSS within this webapp.</text>
+	    <br><text>Site works best in Chrome</text>
+	    <script src="angular.1.6.9.min.js"></script>
+	    <script>
+	        var app = angular.module('app',[]);
+	        app.controller('demo', function demo($scope){
+	            $scope.message="My First AngularJS App";
+	        });
+	    </script><br><br>
+	    """
 
-sqlPreamble4 = """-->
-    <form action="/pwndepot4" method="get">
-    <div>
-        <label for="search">Search:</label>
-        <input type="text" id="search" name="search">
-        <input type="submit" value="Go">
-    </div>
-    <div>
-        <br><label>Example: saw</label>
-    </div><br><br><br>
-</form>
-<table class="table table-bordered" style='width:100%'>
-    <tr align="left">
-        <th><u>Item</u></th>
-        <th><u>Price</u></th>
-        <th><u>Quantity</u></th>   
-    </tr>
-"""
 class PwnDepot(object):
+#DEMO - SSRF
+#Goal: abuse the PDF generation functionality to read secrets located at http://127.0.0.1:31337/secret 
+#Note: this module requires wkhtmltopdf.  This may be downloaded here:
+#https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.4/wkhtmltox-0.12.4_msvc2015-win64.exe
+#Once installed, the bin/ directory must be within the path.  (alternatively, apt-get install wkhtmltopdf)	
+	pages = ['SSRF','pdfgen']
+	@cherrypy.expose(pages)
+	def ssrf(self,html=None,filename=None,**params):
+
+		if html == None:
+			#Input HTML (POST)
+			#<img src="http://placekitten.com/300/200">
+			response = """<html>
+							<head>
+								<title>SSRF Demo</title>
+							</head>
+							<body>
+								<h1>Generate a PDF!</h1>
+								<form action="/pdfgen" id="pdfform" method="post">
+									File Name: <input type="text" name="filename">
+									<input type="submit">
+								</form>
+								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
+							</body>
+						  </html>"""
+		else:
+			#Output link to PDF.
+			if filename != None:
+				if ".pdf" in filename:
+					pdfname = filename
+				else:
+					pdfname  = filename + ".pdf"
+			else:
+				pdfname = "test.pdf"
+			pdfkit.from_string(html,"wwwroot/pdf/" + pdfname)
+			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
+			#Note: need to learn how to set content type within cherrypy.  
+		return response
+#Secret
+	pages = ['secret']
+	@cherrypy.expose(pages)
+	def secret(self,**params):
+		#<iframe src="http://127.0.0.1:31337/secret"><iframe>
+		response = "{'Message':'Top Secret - Unauthorized Access is Not Allowed','key':'5ebe2294ecd0e0f08eab7690d2a6ee69'}"
+		return response
+
 #DEMO - Simple XSS
 #Goal: Invoke JavaScript through XSS within a GET parameter
 	#Create aliases for the same path
@@ -316,6 +290,25 @@ class PwnDepot(object):
 					primarykey += 1
 					conn.commit()
 
+		sqlPreamble1 = """-->
+		    <form action="/pwndepot" method="get">
+			    <div>
+			        <label for="search">Search:</label>
+			        <input type="text" id="search" name="search">
+			        <input type="submit" value="Go">
+			    </div>
+			    <div>
+			        <br><label>Example: saw</label>
+			    </div><br><br><br>
+			</form>
+			<table class="table table-bordered" style='width:100%'>
+			    <tr align="left">
+			        <th><u>Item</u></th>
+			        <th><u>Price</u></th>
+			        <th><u>Quantity</u></th>   
+			    </tr>
+		"""
+
 		#Search function
 		if search != None:
 			print("Search is populated...")
@@ -382,6 +375,25 @@ class PwnDepot(object):
 					primarykey += 1
 					conn.commit()
 
+		sqlPreamble2 = """-->
+		    <form action="/pwndepot2" method="get">
+			    <div>
+			        <label for="search">Search:</label>
+			        <input type="text" id="search" name="search">
+			        <input type="submit" value="Go">
+			    </div>
+			    <div>
+			        <br><label>Example: saw</label>
+			    </div><br><br><br>
+			</form>
+			<table class="table table-bordered" style='width:100%'>
+			    <tr align="left">
+			        <th><u>Item</u></th>
+			        <th><u>Price</u></th>
+			        <th><u>Quantity</u></th>   
+			    </tr>
+		"""
+
 		#Search function
 		if search != None:
 			print("Search is populated...")
@@ -447,6 +459,24 @@ class PwnDepot(object):
 					cursor.execute(statement)
 					primarykey += 1
 					conn.commit()
+
+		sqlPreamble3 = """-->
+		    <form action="/pwndepot3" method="get">
+			    <div>
+			        <label for="search">Search:</label>
+			        <input type="text" id="search" name="search">
+			        <input type="submit" value="Go">
+			    </div>
+			    <div>
+			        <br><label>Example: saw</label>
+			    </div><br><br><br>
+			</form>
+			<table class="table table-bordered" style='width:100%'>
+			    <tr align="left">
+			        <th><u>Item</u></th>
+			        <th><u>Price</u></th>
+			        <th><u>Quantity</u></th>   
+			    </tr>"""
 
 		#Search function
 		evilflag = 0
@@ -517,6 +547,25 @@ class PwnDepot(object):
 					cursor.execute(statement)
 					primarykey += 1
 					conn.commit()
+
+		sqlPreamble4 = """-->
+		<form action="/pwndepot4" method="get">
+    		<div>
+        		<label for="search">Search:</label>
+        		<input type="text" id="search" name="search">
+        		<input type="submit" value="Go">
+    		</div>
+    		<div>
+        		<br><label>Example: saw</label>
+    		</div><br><br><br>
+		</form>
+		<table class="table table-bordered" style='width:100%'>
+    		<tr align="left">
+        		<th><u>Item</u></th>
+        		<th><u>Price</u></th>
+        		<th><u>Quantity</u></th>   
+    		</tr>
+		"""
 
 		#Search function
 		evilflag = 0
