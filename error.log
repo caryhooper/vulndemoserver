@@ -827,3 +827,16 @@ Request Headers:
 [26/Nov/2019:23:46:22] ENGINE Waiting for child threads to terminate...
 [26/Nov/2019:23:46:22] ENGINE Bus EXITED
 [26/Nov/2019:23:46:22] ENGINE Re-spawning C:\Users\Cary\.virtualenvs\vulndemoserver-KNzAZ6mw\Scripts\python.exe -B .\vulndemoserver.py
+[26/Nov/2019:23:46:22] ENGINE Bus STARTING
+[26/Nov/2019:23:46:22] ENGINE Started monitor thread 'Autoreloader'.
+[26/Nov/2019:23:46:22] ENGINE Serving on http://127.0.0.1:31337
+[26/Nov/2019:23:46:22] ENGINE Bus STARTED
+[26/Nov/2019:23:47:18] ENGINE Restarting because C:\Users\Cary\.virtualenvs\vulndemoserver-KNzAZ6mw\lib\base64.py changed.
+[26/Nov/2019:23:47:18] ENGINE Stopped thread 'Autoreloader'.
+[26/Nov/2019:23:47:18] ENGINE Bus STOPPING
+[26/Nov/2019:23:47:18] ENGINE HTTP Server cherrypy._cpwsgi_server.CPWSGIServer(('127.0.0.1', 31337)) shut down
+[26/Nov/2019:23:47:18] ENGINE Bus STOPPED
+[26/Nov/2019:23:47:18] ENGINE Bus EXITING
+[26/Nov/2019:23:47:18] ENGINE Waiting for child threads to terminate...
+[26/Nov/2019:23:47:18] ENGINE Bus EXITED
+[26/Nov/2019:23:47:18] ENGINE Re-spawning C:\Users\Cary\.virtualenvs\vulndemoserver-KNzAZ6mw\Scripts\python.exe -B .\vulndemoserver.py
