@@ -1,8 +1,10 @@
 #!/usr/bin/python3
-import os,base64,random
+import os,base64,random,subprocess
 import cherrypy
 import sqlite3
 import pdfkit
+from weasyprint import HTML
+import time
 #Portable HTTP server to demonstrate web vulnerabilities
 #Author - Cary Hooper @nopantrootdance
 #Todo: Blind SQLi, XXE, 2nd order SQLi, Vue template injection, React injection? 
@@ -28,11 +30,6 @@ configval = {
 		'tools.staticdir.index' : 'index.html',
 		'tools.caching.on' : False,
 		'tools.secureheaders.on' : True
-		},
-	'/favicon.ico' : 
-		{
-		'tools.staticfile.on' : True,
-		'tools.staticfile.filename' : webroot + 'favicon.ico'
 		}
 }
 
@@ -94,20 +91,20 @@ cstiPreamble = """<!DOCTYPE html>
 	</head>
 	<body ng-app="app" ng-controller="demo" bgcolor="#e0dcdc">
 	    <h1>{{message}}</h1>
-	    <text>XSS Me!</text>
-	    <text>Goal: Invoke XSS within this webapp.</text>
-	    <br><text>Site works best in Chrome</text>
+	    <text>AngularJS Demo</text><br>
+	    <text>Goal: Invoke XSS within this app.</text>
+	    <br><br><text>Site works best in Chrome</text>
 	    <script src="angular.1.6.9.min.js"></script>
 	    <script>
 	        var app = angular.module('app',[]);
 	        app.controller('demo', function demo($scope){
-	            $scope.message="My First AngularJS App";
+	            $scope.message="Hello BSides Austin";
 	        });
 	    </script><br><br>
 	    """
 
 class PwnDepot(object):
-#DEMO - SSRF
+#DEMO - SSRF 1
 #Goal: abuse the PDF generation functionality to read secrets located at http://127.0.0.1:31337/secret 
 #Note: this module requires wkhtmltopdf.  This may be downloaded here:
 #https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.4/wkhtmltox-0.12.4_msvc2015-win64.exe
@@ -118,13 +115,14 @@ class PwnDepot(object):
 
 		if html == None:
 			#Input HTML (POST)
-			#<img src="http://placekitten.com/300/200">
 			response = """<html>
 							<head>
 								<title>SSRF Demo</title>
 							</head>
 							<body>
 								<h1>Generate a PDF!</h1>
+								<h3>Using wkhtmltopdf</h3>
+								<img src="../pwndepot.png" height="10%" width="10%"><br>
 								<form action="/pdfgen" id="pdfform" method="post">
 									File Name: <input type="text" name="filename">
 									<input type="submit">
@@ -134,6 +132,10 @@ class PwnDepot(object):
 						  </html>"""
 		else:
 			#Output link to PDF.
+			if (os.path.isdir("wwwroot/pdf")):
+				print("pdf directory exists.  ")
+			else:
+				os.mkdir('wwwroot/pdf')
 			if filename != None:
 				if ".pdf" in filename:
 					pdfname = filename
@@ -143,8 +145,113 @@ class PwnDepot(object):
 				pdfname = "test.pdf"
 			pdfkit.from_string(html,"wwwroot/pdf/" + pdfname)
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
-			#Note: need to learn how to set content type within cherrypy.  
 		return response
+
+#DEMO - SSRF 2
+#Goal: abuse the PDF generation functionality to read secret file located at C:\Temp\admin.log
+#Note: this module requires weasyprint.  Installation instructions here:
+#https://weasyprint.readthedocs.io/en/stable/install.html
+#Installation is a bit involved, but I promise it's worth it.
+	pages = ['SSRF2','pdfgen2']
+	@cherrypy.expose(pages)
+	def ssrf(self,html=None,filename=None,**params):
+
+		if html == None:
+			#Input HTML (POST)
+			response = """<html>
+							<head>
+								<title>SSRF Demo #2</title>
+							</head>
+							<body>
+								<h1>Generate a PDF again!</h1>
+								<h3>Using weasyprint</h3>
+								<img src="../pwndepot.png" height="10%" width="10%"><br>
+								<form action="/pdfgen2" id="pdfform" method="post">
+									File Name: <input type="text" name="filename">
+									<input type="submit">
+								</form>
+								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
+							</body>
+						  </html>"""
+		else:
+			#Output link to PDF.
+			if (os.path.isdir("wwwroot/pdf")):
+				print("pdf directory exists.  ")
+			else:
+				os.mkdir('wwwroot/pdf')
+			if filename != None:
+				if ".pdf" in filename:
+					pdfname = filename
+				else:
+					pdfname  = filename + ".pdf"
+			else:
+				pdfname = "test.pdf"
+			html = HTML(string=html)
+			html.write_pdf("wwwroot/pdf/" + pdfname)
+			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
+		return response
+
+
+#DEMO - SSRF 3
+#Goal: abuse the PDF generation functionality to execute JavaScript on the server
+#Note: this module requires Chrome.  Point to a local chrome install
+	pages = ['SSRF3','pdfgen3']
+	@cherrypy.expose(pages)
+	def ssrf(self,html=None,filename=None,**params):
+		if html == None:
+			#Input HTML (POST)
+			response = """<html>
+							<head>
+								<title>SSRF Demo #3</title>
+							</head>
+							<body>
+								<h1>Generate a PDF for Pwnage!</h1>
+								<h3>Using Headless Chrome</h3>
+								<img src="../pwndepot.png" height="10%" width="10%"><br>
+								<form action="/pdfgen3" id="pdfform" method="post">
+									File Name: <input type="text" name="filename">
+									<input type="submit">
+								</form>
+								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
+							</body>
+						  </html>"""
+		else:
+			#Output link to PDF.
+			if (os.path.isdir("wwwroot/pdf")):
+				pass
+			else:
+				os.mkdir('wwwroot/pdf')
+			if filename != None:
+				if ".pdf" in filename:
+					pdfname = filename
+				else:
+					pdfname  = filename + ".pdf"
+			else:
+				pdfname = "test.pdf"
+			#Don't need this because Chrome.exe is in our PATH:
+			#CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
+			tempname = filename.split('.')[0] + '.html'
+			pdfpath = "C:\\Users\\Cary\\Documents\\Programming\\Python\\vulndemoserver\\wwwroot\\pdf\\"
+			file = open(pdfpath + tempname,'w')
+			print(f"DEBUG - Writing {html} to file {pdfpath + tempname}")
+			file.write(html)
+			file.close()
+			#"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --print-to-pdf="C:\Temp\a.pdf" --no-margins file:///C:/Users/Cary/Documents/Programming/Python/vulndemoserver/wwwroot/pdf/foobar.html
+			execarray = ["chrome.exe", "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath + pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			p = subprocess.Popen(execarray,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			#DEBUG Purposes Only
+			stdout, stderr = p.communicate()
+			retcode = p.returncode
+			if retcode != 0:
+				foo = f"DEBUG - stderr {stderr}"
+				bar = f"DEBUG - stdout {stdout}"
+				return foo + "<br><br>" + bar
+			print(f"DEBUG - returncode {retcode}")
+			time.sleep(2)
+			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
+		return response
+
+
 #Secret
 	pages = ['secret']
 	@cherrypy.expose(pages)
@@ -152,6 +259,26 @@ class PwnDepot(object):
 		#<iframe src="http://127.0.0.1:31337/secret"><iframe>
 		response = "{'Message':'Top Secret - Unauthorized Access is Not Allowed','key':'5ebe2294ecd0e0f08eab7690d2a6ee69'}"
 		return response
+
+
+#DEMO - Client Side Template Injection
+#Goal: Invoke JavaScript through an AngularJS Template within a GET parameter
+	#Create aliases for the same path
+	pages = ['CSTI','AngularJS']
+	@cherrypy.expose(pages)
+	def csti(self,h00p=None,**params):
+		#TODO Check if file exists, then download AngularJS module.
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br>Error: h00p is not defined<br>"
+		else:
+			#This for loop emulates htmlcspecialchars
+			badchardict = {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;','\'':'&#039'}
+			for badchar in ['&','<','>','"','\'']:
+				if badchar in h00p:
+					h00p = h00p.replace(badchar,badchardict[badchar])
+			response = "Hello " + h00p + "<br>"
+		return cstiPreamble + response
 
 #DEMO - Simple XSS
 #Goal: Invoke JavaScript through XSS within a GET parameter
@@ -209,27 +336,6 @@ class PwnDepot(object):
 			if evilflag != 1:
 				response = "Hello " + h00p + "<br>"
 		return cstiPreamble + response
-
-#DEMO - Client Side Template Injection
-#Goal: Invoke JavaScript through an AngularJS Template within a GET parameter
-	#Create aliases for the same path
-	pages = ['CSTI','angular','AngularJS']
-	@cherrypy.expose(pages)
-	def csti(self,h00p=None,**params):
-		#TODO Check if file exists, then download AngularJS module.
-		evilflag = 0
-		response = "Unexpected Error<br>"
-		if h00p == None:
-			response = "<br>Error: h00p is not defined<br>"
-		else:
-			for badchar in ['<','>','`']:
-				if badchar in h00p:
-					response = "Character not allowed.<br>"
-					evilflag = 1
-			if evilflag != 1:
-				response = "Hello " + h00p + "<br>"
-		return cstiPreamble + response
-
 
 #DEMO - SQL Injection
 #Level1 - Dump the contents of the tools database.
@@ -586,6 +692,10 @@ class PwnDepot(object):
 			#Output the page
 		goal = " Goal: bypass filters and find the administrator password."
 		return sqlPreamble + goal + sqlPreamble4 + response
+
+	@cherrypy.expose('shutdown')
+	def shutdown(self):  
+	    cherrypy.engine.exit()
 
 cherrypy.tree.mount(PwnDepot(),'/', config=configval)
 
