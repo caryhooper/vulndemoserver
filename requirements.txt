@@ -1,2 +1,3 @@
 cherrypy>=17.4.2
 pdfkit
+weasyprint==48

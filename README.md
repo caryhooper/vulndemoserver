@@ -1,6 +1,6 @@
 # Vulnerable Demo Server
 
-This progam is a standalone web server hosting apps vulnerable to a number of commmon web bugs.  I made this to introduce those new or interested in information security to classes of web vulnerabilities.  
+This program is a standalone web server hosting apps vulnerable to a number of commmon web bugs.  I made this to introduce those new or interested in information security to classes of web vulnerabilities.  
 
 ** Current Modules **
 - XSS (HTML injection, filter bypass, AngularJS injection)

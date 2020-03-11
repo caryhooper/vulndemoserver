@@ -18,7 +18,7 @@ else:
 	webroot = 'wwwroot/'
 PATH = os.path.abspath(webroot)
 port = 31337
-#To bind on all porta, change this to: socket_host = "0.0.0.0"
+#To bind on all ports, change this to: socket_host = "0.0.0.0" #AKA the "I like to live dangerously" option
 socket_host = "127.0.0.1"
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
@@ -98,7 +98,7 @@ cstiPreamble = """<!DOCTYPE html>
 	    <script>
 	        var app = angular.module('app',[]);
 	        app.controller('demo', function demo($scope){
-	            $scope.message="Hello BSides Austin";
+	            $scope.message="Welcome to My First AngularJS Site";
 	        });
 	    </script><br><br>
 	    """
@@ -147,7 +147,7 @@ class PwnDepot(object):
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
 		return response
 
-#DEMO - SSRF 2
+#DEMO - SSRF 2 / LFI
 #Goal: abuse the PDF generation functionality to read secret file located at C:\Temp\admin.log
 #Note: this module requires weasyprint.  Installation instructions here:
 #https://weasyprint.readthedocs.io/en/stable/install.html
@@ -192,9 +192,10 @@ class PwnDepot(object):
 		return response
 
 
-#DEMO - SSRF 3
+#DEMO - SSRF 3 / RCE
 #Goal: abuse the PDF generation functionality to execute JavaScript on the server
 #Note: this module requires Chrome.  Point to a local chrome install
+#Watch out... this modules requires full paths to 
 	pages = ['SSRF3','pdfgen3']
 	@cherrypy.expose(pages)
 	def ssrf(self,html=None,filename=None,**params):
@@ -228,16 +229,16 @@ class PwnDepot(object):
 					pdfname  = filename + ".pdf"
 			else:
 				pdfname = "test.pdf"
-			#Don't need this because Chrome.exe is in our PATH:
-			#CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
+			
+			CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
 			tempname = filename.split('.')[0] + '.html'
-			pdfpath = "C:\\Users\\Cary\\Documents\\Programming\\Python\\vulndemoserver\\wwwroot\\pdf\\"
+			pdfpath = "C:\\Users\\Cary\\Documents\\Projects\\vulndemoserver\\wwwroot\\pdf\\"
 			file = open(pdfpath + tempname,'w')
 			print(f"DEBUG - Writing {html} to file {pdfpath + tempname}")
 			file.write(html)
 			file.close()
 			#"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --print-to-pdf="C:\Temp\a.pdf" --no-margins file:///C:/Users/Cary/Documents/Programming/Python/vulndemoserver/wwwroot/pdf/foobar.html
-			execarray = ["chrome.exe", "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath + pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			execarray = [CHROME_PATH, "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath + pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
 			p = subprocess.Popen(execarray,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			#DEBUG Purposes Only
 			stdout, stderr = p.communicate()
@@ -272,7 +273,7 @@ class PwnDepot(object):
 		if h00p == None:
 			response = "<br>Error: h00p is not defined<br>"
 		else:
-			#This for loop emulates htmlcspecialchars
+			#This for loop emulates PHP's htmlspecialchars()
 			badchardict = {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;','\'':'&#039'}
 			for badchar in ['&','<','>','"','\'']:
 				if badchar in h00p:
