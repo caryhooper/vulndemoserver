@@ -49,6 +49,7 @@ def secureheaders():
 	headers["Pragma"] = "no-cache"
 	headers["P3P"] = "CP='Potato'"
 	headers["Server"] = "Tesla Model S/2019"
+	headers["Access-Control-Allow-Origin"] = "*"
 	headers["X-Haiku"] = "CherryPy is fun, but difficult to work with.  This is a haiku."
 	cookie = cherrypy.response.cookie
 	cookie["Cookie"] = base64.b64encode(b"Here, have a cookie!")
