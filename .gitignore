@@ -2,3 +2,4 @@ Pipfile
 Pipfile.lock
 *.log
 *.db
+wwwroot/pdf/*
