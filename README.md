@@ -6,6 +6,7 @@ This program is a standalone web server hosting apps vulnerable to a number of c
 - XSS (HTML injection, filter bypass, AngularJS injection)
 - SQL Injection (basic, UNION attack, filter bypass)
 - SSRF (PDF generation)
+- Weak Cryptography (AES ECB information leak)
 
 ## Getting Started
 
