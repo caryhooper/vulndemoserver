@@ -104,6 +104,31 @@ cstiPreamble = """<!DOCTYPE html>
 	    </script><br><br>
 	    """
 
+weakCryptoPreamble = """<!DOCTYPE html>
+	<html>
+	<head><title>Weak Crypto Demo</title></head>
+	<body bgcolor="#e0dcdc">
+	    <br><br>
+	    <h1>PWN Depot Token Generator</h1>
+	    <h3>We use world-class 256-bit encryption to protect your transactions. </br> 
+	    Don't believe us? We'll prove it to you.  There is surely no way to leak </br>
+	    our account number! The smartest scientists in the world invented this stuff, right? </br>
+	    </h3>
+	   	<div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+	    <img src="../pwndepot.png" height="10%" width="10%">
+	    <ol>
+	    	<h4>Input your name.</h4>
+	    	<h4>We'll append our 16-digit Bank account number and encrypt it with our world-class AES ECB encryption algorithm.</h4>
+	    	<h4>Receive the encrypted value below!</h4>
+	    </ol><br><br>
+		<form action="/crypto" method="get">
+		    <div>
+		        <label for="name">Enter your name:</label>
+		        <input type="text" name="name">
+		        <input type="submit" value="Go">
+		    </div><br>
+		</form>"""
+
 class PwnDepot(object):
 #DEMO - SSRF 1
 #Goal: abuse the PDF generation functionality to read secrets located at http://127.0.0.1:31337/secret 
@@ -192,7 +217,6 @@ class PwnDepot(object):
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
 		return response
 
-
 #DEMO - SSRF 3 / RCE
 #Goal: abuse the PDF generation functionality to execute JavaScript on the server
 #Note: this module requires Chrome.  Point to a local chrome install
@@ -253,7 +277,6 @@ class PwnDepot(object):
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
 		return response
 
-
 #Secret
 	pages = ['secret']
 	@cherrypy.expose(pages)
@@ -262,6 +285,36 @@ class PwnDepot(object):
 		response = "{'Message':'Top Secret - Unauthorized Access is Not Allowed','key':'5ebe2294ecd0e0f08eab7690d2a6ee69'}"
 		return response
 
+#DEMO - Weak Encryption Implementation
+#Goal: Leak the account number from the web site
+	#Create aliases for the same path
+	pages = ['ECB','crypto']
+	@cherrypy.expose(pages)
+	def csti(self,name=None,**params):
+		from Crypto.Cipher import AES
+		from Crypto.Util.Padding import pad, unpad
+		#uses pycryptodome
+		import binascii 
+		SECRET_ACCT_NUMBER = "ML031337-8675309"
+		response ="""<h3><b>The Encrypted Value is: <code>"""
+
+		def raw2hex(value):
+		    return binascii.hexlify(value)
+		def do_encrypt(inputname):
+			key = "8d127684cbc37c17616d806cf50473cc" #16bytes
+			#Note: this is crackable with a brute-force attack md5(rockyou.txt)
+			plaintext = f"{inputname}:{SECRET_ACCT_NUMBER}".encode('utf-8')
+			encryptor = AES.new(bytes.fromhex(key),AES.MODE_ECB)
+			plaintext_pad = pad(plaintext,16)
+			ciphertext = encryptor.encrypt(plaintext_pad)
+			ciphertext_x = raw2hex(ciphertext).decode()
+			return ciphertext_x
+		if name == None:
+			response = response + "ENCRYPTED VALUE HERE"
+		else:
+			ciphertext = do_encrypt(name)
+			response += ciphertext
+		return weakCryptoPreamble + response + "</code></b><h3></body></html>"
 
 #DEMO - Client Side Template Injection
 #Goal: Invoke JavaScript through an AngularJS Template within a GET parameter
@@ -427,7 +480,7 @@ class PwnDepot(object):
 
 			#Output the page
 		goal = " Goal: dump the contents of the tools table to find the secret tools."
-		return sqlPreamble + goal + sqlPreamble2 + response
+		return sqlPreamble + goal + sqlPreamble1 +  response
 
 #DEMO - SQL Injection 2
 #Level2 - Using a UNION attack, read the contents of another table.
@@ -513,7 +566,6 @@ class PwnDepot(object):
 			#Output the page
 		goal = " Goal: find the administrator password."
 		return sqlPreamble + goal + sqlPreamble2 + response
-
 
 #DEMO - SQL Injection 3
 #Level3 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
