@@ -8,7 +8,6 @@ import time
 #Portable HTTP server to demonstrate web vulnerabilities
 #Author - Cary Hooper @nopantrootdance
 #Todo: Blind SQLi, XXE, 2nd order SQLi, Vue template injection, React injection? 
-#Todo: consolidate like functionality into functions or classes.  
 
 #Change these configs:
 log_file_path = ''
@@ -31,11 +30,12 @@ configval = {
 		'tools.caching.on' : False,
 		'tools.secureheaders.on' : True
 		}
-}
+	}
 
 # Start CherryPy server
 # Setup security headers
 @cherrypy.tools.register('before_finalize', priority=60)
+
 def secureheaders():
 	#No promise these are the most secure config. 
 	#Thanks, to Andy (https://github.com/andyacer) for introducing me to CherryPy 
@@ -49,12 +49,13 @@ def secureheaders():
 	headers["Pragma"] = "no-cache"
 	headers["P3P"] = "CP='Potato'"
 	headers["Server"] = "Tesla Model S/2019"
+	#Need ACAO = * for cross-origin SSRF Exploits
 	headers["Access-Control-Allow-Origin"] = "*"
 	headers["X-Haiku"] = "CherryPy is fun, but difficult to work with.  This is a haiku."
 	cookie = cherrypy.response.cookie
 	cookie["Cookie"] = base64.b64encode(b"Here, have a cookie!")
 
-
+#Log File Settings
 cherrypy.config.update({
 	'server.socket_host' : socket_host,
 	'server.socket_port' : port,
@@ -68,94 +69,277 @@ def create_connection(db_file):
 	#Connect to sqlite db
 	try:
 		conn = sqlite3.connect(db_file)
-		print(sqlite.version)
-	except Error as e:
+		print(sqlite3.version)
+		return conn
+	except Exception as e:
 		print(e)
-	finally:
-		conn.close()
 
-sqlPreamble = """<!DOCTYPE html>
-	<html>
-	<head><title>SQLi Demo</title></head>
-	<body bgcolor="#e0dcdc">
-	    <br><br>
-	    <h1>Welcome to PWN Depot</h1>
-	    <h4>Where you can buy just about anything...</h4>
-	    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
-	    <img src="../pwndepot.png" height="10%" width="10%">
-	    <br><br><!-- """
+def initialize_db(db_file):
+	#Creates the sqlite3 database if it does not exist already).
+	#Try to create tables.  Throw exception if they already exist.
+	conn = create_connection(db_file)
+	cursor = conn.cursor()
+	cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
+	#Create and populate the TOOLS Table
+	if cursor.fetchone()[0] != 1:
+		print("\n\n\nCreating table: TOOLS\n\n\n")
 
-cstiPreamble = """<!DOCTYPE html>
-	<html>
-	<head>
-	    <title>CSTI Demo</title>
-	</head>
-	<body ng-app="app" ng-controller="demo" bgcolor="#e0dcdc">
-	    <h1>{{message}}</h1>
-	    <text>AngularJS Demo</text><br>
-	    <text>Goal: Invoke XSS within this app.</text>
-	    <br><br><text>Site works best in Chrome</text>
-	    <script src="angular.1.6.9.min.js"></script>
-	    <script>
-	        var app = angular.module('app',[]);
-	        app.controller('demo', function demo($scope){
-	            $scope.message="Welcome to My First AngularJS Site";
-	        });
-	    </script><br><br>
-	    """
+		tools = ["adze","allen wrench","wrench","anvil","axe","bellows","bevel","block","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench","DIY DIRTY BOMB KIT"]
+		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
+		cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
+			TOOL TEXT NOT NULL,
+			PRICE TEXT NOT NULL,
+			QUANTITY TEXT NOT NULL);''')
+		primarykey = 0
+		print("\n\n\nFilling table: TOOLS\n\n\n")
+		for tool in tools:
+			price = random.randint(1,301)
+			qty = random.randint(0,1001)
+			if tool == "DIY DIRTY BOMB KIT":
+				print("Adding flag! " + str(primarykey))
+				price = "YouFoundTheFlag."
+				qty = "Congrats!"
+			statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "','" + str(price) + "','" + str(qty) + "')"
+			cursor.execute(statement)
+			print("Added tool with primarykey " + str(primarykey))
+			primarykey += 1
+			conn.commit()
 
-weakCryptoPreamble = """<!DOCTYPE html>
-	<html>
-	<head><title>Weak Crypto Demo</title></head>
-	<body bgcolor="#e0dcdc">
-	    <br><br>
-	    <h1>PWN Depot Token Generator</h1>
-	    <h3>We use world-class 256-bit encryption to protect your transactions. </br> 
-	    Don't believe us? We'll prove it to you.  There is surely no way to leak </br>
-	    our account number! The smartest scientists in the world invented this stuff, right? </br>
-	    </h3>
-	   	<div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
-	    <img src="../pwndepot.png" height="10%" width="10%">
-	    <ol>
-	    	<h4>Input your name.</h4>
-	    	<h4>We'll append our 16-digit Bank account number and encrypt it with our world-class AES ECB encryption algorithm.</h4>
-	    	<h4>Receive the encrypted value below!</h4>
-	    </ol><br><br>
-		<form action="/crypto" method="get">
-		    <div>
-		        <label for="name">Enter your name:</label>
-		        <input type="text" name="name">
-		        <input type="submit" value="Go">
-		    </div><br>
-		</form>"""
+		#Now create and populate the USERS table
+		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
+		if cursor.fetchone()[0] != 1:
+			print("\n\n\nCreating table: USERS\n\n\n")
+			cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
+				USERNAME TEXT NOT NULL,
+				PASSWORD INT NOT NULL);
+				''')
+			primarykey = 0
+			print("\n\n\nFilling table: USERS\n\n\n")
+			for user in usernames:
+				statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
+				cursor.execute(statement)
+				primarykey += 1
+				conn.commit()
+	return conn
+
+def getPreamble(attack,level,extra="",technology=""):
+	if attack == "xss":
+		extra = ""
+		xssPreamble = f"""<!DOCTYPE html>
+			<html>
+			<head>
+			    <title>XSS Demo ({level})</title>
+			</head>
+			<body ng-app="app" ng-controller="demo" bgcolor="#e0dcdc">
+			    <h1>{{{{message}}}}</h1>
+			    <text>AngularJS Demo ({level})</text><br>
+			    <text>Goal: Invoke XSS within this app.</text>
+			    <br><br><text>Site works best in Chrome</text>
+			    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+			    <script src="angular.1.6.9.min.js"></script>
+			    <script>
+			        var app = angular.module('app',[]);
+			        app.controller('demo', function demo($scope){{
+			            $scope.message="Welcome to My First AngularJS Site";
+			        }});
+			    </script>{extra}<br><br>"""
+		return xssPreamble
+	if attack == "sqli":
+		sqlPreamble = f"""<!DOCTYPE html>
+			<html>
+			<head><title>SQLi Demo ({level})</title></head>
+			<body bgcolor="#e0dcdc">
+			    <br><br>
+			    <h1>Welcome to PWN Depot ({level})</h1>
+			    <h4>Where you can buy just about anything...</h4>
+			    <div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+			    <img src="../pwndepot.png" height="10%" width="10%">
+			    <br>
+			    {technology}
+			    <form action="/{extra}" method="get">
+			    <div>
+			        <label for="search">Search:</label>
+			        <input type="text" id="search" name="search">
+			        <input type="submit" value="Go">
+			    </div>
+			    <div>
+			        <br><label>Example: saw</label>
+			    </div><br><br><br>
+			</form>
+			<table class="table table-bordered" style='width:100%'>
+			    <tr align="left">
+			        <th><u>Item</u></th>
+			        <th><u>Price</u></th>
+			        <th><u>Quantity</u></th>   
+			    </tr>
+		"""
+		return sqlPreamble
+	if attack == "crypto":
+		weakCryptoPreamble = f"""<!DOCTYPE html>
+			<html>
+			<head><title>Weak Crypto Demo ({level})</title></head>
+			<body bgcolor="#e0dcdc">
+			    <br><br>
+			    <h1>PWN Depot Token Generator ({level})</h1>
+			    <h3>We use world-class 256-bit encryption to protect your transactions. </br> 
+			    Don't believe us? We'll prove it to you.  There is surely no way to leak </br>
+			    our account number! The smartest scientists in the world invented this stuff, right? </br>
+			    </h3>
+			   	<div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+			    <img src="../pwndepot.png" height="10%" width="10%">
+			    <ol>
+			    	<h4>Input your name.</h4>
+			    	<h4>We'll append our 16-digit Bank account number and encrypt it with our world-class AES ECB encryption algorithm.</h4>
+			    	<h4>Receive the encrypted value below!</h4>
+			    </ol><br><br>
+				<form action="/crypto" method="get">
+				    <div>
+				        <label for="name">Enter your name:</label>
+				        <input type="text" name="name">
+				        <input type="submit" value="Go">
+				    </div><br>
+				</form>"""
+		return weakCryptoPreamble
+	if attack == "cmdi":
+		cmdiPreamble = f"""<!DOCTYPE html>
+			<html>
+			<head><title>Weak Crypto Demo ({level})</title></head>
+			<body bgcolor="#e0dcdc">
+			    <br><br>
+			    <h1>PWN Depot Server Status Manager ({level})</h1>
+			    <h3>Warning: for sysadmins only!</br> 
+			    The unauthorized use of this information system is prohibited.</br>
+			    </br>
+			    </h3>
+			   	<div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+			    <img src="../pwndepot.png" height="20%" width="20%">
+			    <ol>
+			    	<h4>{extra}</h4>
+			    </ol><br><br>
+				<form action="/serverstatus" method="get">
+				    <div>
+				        <label for="name">Enter a server IP address:</label>
+				        <input type="text" name="server">
+				        <input type="submit" value="Go">
+				    </div><br>
+				</form>"""
+		return cmdiPreamble
+	if attack == "ssrf":
+		ssrfPreamble =  f"""<html>
+				<head>
+					<title>SSRF Demo ({level})</title>
+				</head>
+				<body bgcolor="#e0dcdc">
+					<h1>Generate a PDF ({level})</h1>
+					<h3>Using {technology}</h3>
+					<img src="../pwndepot.png" height="10%" width="10%"><br>
+					<form action="/{extra}" id="pdfform" method="post">
+						File Name: <input type="text" name="filename">
+						<input type="submit">
+					</form>
+					<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
+				</body>
+			  </html>"""
+		return ssrfPreamble
 
 class PwnDepot(object):
-#DEMO - SSRF 1
-#Goal: abuse the PDF generation functionality to read secrets located at http://127.0.0.1:31337/secret 
-#Note: this module requires wkhtmltopdf.  This may be downloaded here:
-#https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.4/wkhtmltox-0.12.4_msvc2015-win64.exe
-#Once installed, the bin/ directory must be within the path.  (alternatively, apt-get install wkhtmltopdf)	
+
+#XSS{
+	pages = ['XSS','CSS','css']
+	@cherrypy.expose(pages)
+	def xss(self,h00p=None,**params):
+		#DEMO - Simple XSS
+		#Goal: Invoke JavaScript through XSS within a GET parameter
+		#http://127.0.0.1:31337/xss?h00p=%3Cscript%3Ealert(1)%3C/script%3E
+		xssPreamble = getPreamble("xss",1)
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br><code>Error: h00p is not defined</code><br>"
+		else:
+			response = f"Hello {h00p}!<br>"
+		return xssPreamble + response
+
+	pages = ['XSS2','CSS2','css2']
+	@cherrypy.expose(pages)
+	def xss2(self,h00p=None,**params):
+		#DEMO - Simple XSS 2
+		#Goal: Invoke JavaScript through XSS within a GET parameter
+		#http://127.0.0.1:31337/xss2?h00p=%3Cimage%20src=x%20onerror=alert(1)%3E
+		xssPreamble = getPreamble("xss",2)
+		evilflag = 0
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br>Error: h00p is not defined<br>"
+		else:
+			for badchar in ['script','onload','img']:
+				if badchar in h00p.lower():
+					response = "String not allowed (script,onload,img).<br>"
+					evilflag = 1
+			if evilflag != 1:
+				response = f"Hello {h00p}!<br>"
+		return xssPreamble + response
+
+	pages = ['XSS3','CSS3','css3']
+	@cherrypy.expose(pages)
+	def xss3(self,h00p=None,**params):
+		#DEMO - Simple XSS 3
+		#Goal: Invoke JavaScript through XSS within a GET parameter
+		#Create aliases for the same path
+		#http://127.0.0.1:31337/xss3?h00p=%3Csvg//onload=alert`1`%3E
+		xssPreamble = getPreamble("xss",3)
+		evilflag = 0
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br>Error: h00p is not defined<br>"
+		else:
+			for badchar in ['\'','"',' ','(',')']:
+				if badchar in h00p.lower():
+					response = "Character not allowed (',\",space,()).<br>"
+					evilflag = 1
+			if evilflag != 1:
+				response = f"Hello {h00p}!<br>"
+		return xssPreamble + response
+
+	pages = ['CSTI','AngularJS']
+	@cherrypy.expose(pages)
+	def csti(self,h00p=None,**params):
+		#DEMO - Client Side Template Injection
+		#Goal: Invoke JavaScript through an AngularJS Template within a GET parameter
+		#Create aliases for the same path
+		#TODO Check if file exists, then download AngularJS module.
+		#http://127.0.0.1:31337/xss2?h00p={{constructor.constructor(%22alert(1)%22)()}}
+		extra = "<p>Note: input is sanitized with a function similar to PHP's htmlspecialchars.</p>"
+		xssPreamble = getPreamble("xss",4,extra)
+		response = "Unexpected Error<br>"
+		if h00p == None:
+			response = "<br>Error: h00p is not defined<br>"
+		else:
+			#This for loop emulates PHP's htmlspecialchars()
+			badchardict = {
+				'<':'&lt;',
+				'>':'&gt;',
+				'&':'&amp;',
+				'"':'&quot;',
+				'\'':'&#039'
+			}
+			for key,value in badchardict.items():
+				if key in h00p:
+					h00p = h00p.replace(key,value)
+			response = "Hello " + h00p + "<br>"
+		return xssPreamble + response
+#}
+
+#SSRF in PDF Generation{
 	pages = ['SSRF','pdfgen']
 	@cherrypy.expose(pages)
 	def ssrf(self,html=None,filename=None,**params):
-
+		#DEMO - SSRF 1 
+		#Goal: abuse the PDF generation functionality to forge a HTTP request from the server
+		#Note: this module requires wkhtmltopdf.  Install with pip
+		#<iframe src="http://j8ss5y0ayf4502ssu8zlbosip9vzjo.burpcollaborator.net" width="500px" height="500px"></iframe>
 		if html == None:
 			#Input HTML (POST)
-			response = """<html>
-							<head>
-								<title>SSRF Demo</title>
-							</head>
-							<body>
-								<h1>Generate a PDF!</h1>
-								<h3>Using wkhtmltopdf</h3>
-								<img src="../pwndepot.png" height="10%" width="10%"><br>
-								<form action="/pdfgen" id="pdfform" method="post">
-									File Name: <input type="text" name="filename">
-									<input type="submit">
-								</form>
-								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
-							</body>
-						  </html>"""
+			response = getPreamble("ssrf",1,extra="pdfgen",technology="wkhtmltopdf")
 		else:
 			#Output link to PDF.
 			if (os.path.isdir("wwwroot/pdf")):
@@ -173,32 +357,19 @@ class PwnDepot(object):
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
 		return response
 
-#DEMO - SSRF 2 / LFI
-#Goal: abuse the PDF generation functionality to read secret file located at C:\Temp\admin.log
-#Note: this module requires weasyprint.  Installation instructions here:
-#https://weasyprint.readthedocs.io/en/stable/install.html
-#Installation is a bit involved, but I promise it's worth it.
+
 	pages = ['SSRF2','pdfgen2']
 	@cherrypy.expose(pages)
-	def ssrf(self,html=None,filename=None,**params):
-
+	def ssrf2(self,html=None,filename=None,**params):
+		#DEMO - SSRF 2 / LFI
+		#Goal: abuse the PDF generation functionality to read secret file located at C:\Temp\admin.log
+		#Note: this module requires weasyprint.  Installation instructions here:
+		#https://weasyprint.readthedocs.io/en/stable/install.html
+		#Installation is a bit involved, but I promise it's worth it.
+		#Need to fix <a href="file://c:/TEMP/admin.log" rel="attachment">harmless link</a>
 		if html == None:
 			#Input HTML (POST)
-			response = """<html>
-							<head>
-								<title>SSRF Demo #2</title>
-							</head>
-							<body>
-								<h1>Generate a PDF again!</h1>
-								<h3>Using weasyprint</h3>
-								<img src="../pwndepot.png" height="10%" width="10%"><br>
-								<form action="/pdfgen2" id="pdfform" method="post">
-									File Name: <input type="text" name="filename">
-									<input type="submit">
-								</form>
-								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
-							</body>
-						  </html>"""
+			response = getPreamble("ssrf",2,"pdfgen","WeasyPrint")
 		else:
 			#Output link to PDF.
 			if (os.path.isdir("wwwroot/pdf")):
@@ -214,33 +385,20 @@ class PwnDepot(object):
 				pdfname = "test.pdf"
 			html = HTML(string=html)
 			html.write_pdf("wwwroot/pdf/" + pdfname)
-			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
+			response = f"<html><body>Please view your PDF at this <a href=\"pdf/{pdfname}\">link.</a></body></html>"
 		return response
 
-#DEMO - SSRF 3 / RCE
-#Goal: abuse the PDF generation functionality to execute JavaScript on the server
-#Note: this module requires Chrome.  Point to a local chrome install
-#Watch out... this modules requires full paths to 
 	pages = ['SSRF3','pdfgen3']
 	@cherrypy.expose(pages)
-	def ssrf(self,html=None,filename=None,**params):
+	def ssrf3(self,html=None,filename=None,**params):
+		#DEMO - SSRF 3 / RCE
+		#Goal: abuse the PDF generation functionality to execute JavaScript on the server
+		#Note: this module requires Chrome.  Point to a local chrome install
+		#Watch out... this modules requires full paths to EXEs/binaries
+		#<h1>inject</h1><script>document.write(123)</script>
 		if html == None:
 			#Input HTML (POST)
-			response = """<html>
-							<head>
-								<title>SSRF Demo #3</title>
-							</head>
-							<body>
-								<h1>Generate a PDF for Pwnage!</h1>
-								<h3>Using Headless Chrome</h3>
-								<img src="../pwndepot.png" height="10%" width="10%"><br>
-								<form action="/pdfgen3" id="pdfform" method="post">
-									File Name: <input type="text" name="filename">
-									<input type="submit">
-								</form>
-								<textarea rows="4" cols="50" name="html" form="pdfform">Enter HTML here.</textarea>
-							</body>
-						  </html>"""
+			response = getPreamble("ssrf",3,"pdfgen","Headless Chrome")
 		else:
 			#Output link to PDF.
 			if (os.path.isdir("wwwroot/pdf")):
@@ -258,12 +416,12 @@ class PwnDepot(object):
 			CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
 			tempname = filename.split('.')[0] + '.html'
 			pdfpath = "C:\\Users\\Cary\\Documents\\Projects\\vulndemoserver\\wwwroot\\pdf\\"
-			file = open(pdfpath + tempname,'w')
-			print(f"DEBUG - Writing {html} to file {pdfpath + tempname}")
+			file = open(f"{pdfpath}{tempname}",'w+')
+			print(f"DEBUG - Writing {html} to file {pdfpath}{tempname}")
 			file.write(html)
 			file.close()
 			#"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --print-to-pdf="C:\Temp\a.pdf" --no-margins file:///C:/Users/Cary/Documents/Programming/Python/vulndemoserver/wwwroot/pdf/foobar.html
-			execarray = [CHROME_PATH, "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath + pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			execarray = [CHROME_PATH, "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath}{pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
 			p = subprocess.Popen(execarray,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			#DEBUG Purposes Only
 			stdout, stderr = p.communicate()
@@ -274,23 +432,25 @@ class PwnDepot(object):
 				return foo + "<br><br>" + bar
 			print(f"DEBUG - returncode {retcode}")
 			time.sleep(2)
-			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
+			response = f"<html><body>Please view your PDF at this <a href=\"pdf/{pdfname}\">link.</a></body></html>"
 		return response
 
-#Secret
 	pages = ['secret']
 	@cherrypy.expose(pages)
 	def secret(self,**params):
+		#Secret to exfiltrate in SSRF modules
 		#<iframe src="http://127.0.0.1:31337/secret"><iframe>
 		response = "{'Message':'Top Secret - Unauthorized Access is Not Allowed','key':'5ebe2294ecd0e0f08eab7690d2a6ee69'}"
 		return response
+#}
 
-#DEMO - Weak Encryption Implementation
-#Goal: Leak the account number from the web site
-	#Create aliases for the same path
+#Crypto{
 	pages = ['ECB','crypto']
 	@cherrypy.expose(pages)
-	def csti(self,name=None,**params):
+	def ecb(self,name=None,**params):
+		#DEMO - Weak Encryption Implementation
+		#Goal: Leak the account number from the web site
+		weakCryptoPreamble = getPreamble("crypto",1)
 		from Crypto.Cipher import AES
 		from Crypto.Util.Padding import pad, unpad
 		#uses pycryptodome
@@ -315,322 +475,76 @@ class PwnDepot(object):
 			ciphertext = do_encrypt(name)
 			response += ciphertext
 		return weakCryptoPreamble + response + "</code></b><h3></body></html>"
+#}
 
-#DEMO - Client Side Template Injection
-#Goal: Invoke JavaScript through an AngularJS Template within a GET parameter
-	#Create aliases for the same path
-	pages = ['CSTI','AngularJS']
-	@cherrypy.expose(pages)
-	def csti(self,h00p=None,**params):
-		#TODO Check if file exists, then download AngularJS module.
-		response = "Unexpected Error<br>"
-		if h00p == None:
-			response = "<br>Error: h00p is not defined<br>"
-		else:
-			#This for loop emulates PHP's htmlspecialchars()
-			badchardict = {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;','\'':'&#039'}
-			for badchar in ['&','<','>','"','\'']:
-				if badchar in h00p:
-					h00p = h00p.replace(badchar,badchardict[badchar])
-			response = "Hello " + h00p + "<br>"
-		return cstiPreamble + response
-
-#DEMO - Simple XSS
-#Goal: Invoke JavaScript through XSS within a GET parameter
-	#Create aliases for the same path
-	pages = ['XSS','CSS','css']
-	@cherrypy.expose(pages)
-	def xss(self,h00p=None,**params):
-		evilflag = 0
-		response = "Unexpected Error<br>"
-		if h00p == None:
-			response = "<br>Error: h00p is not defined<br>"
-		else:
-			for badchar in []:
-				if badchar in h00p:
-					response = "Character not allowed.<br>"
-					evilflag = 1
-			if evilflag != 1:
-				response = "Hello " + h00p + "<br>"
-		return cstiPreamble + response
-
-#DEMO - Simple XSS 2
-#Goal: Invoke JavaScript through XSS within a GET parameter
-	#Create aliases for the same path
-	pages = ['XSS2','CSS2','css2']
-	@cherrypy.expose(pages)
-	def xss2(self,h00p=None,**params):
-		evilflag = 0
-		response = "Unexpected Error<br>"
-		if h00p == None:
-			response = "<br>Error: h00p is not defined<br>"
-		else:
-			for badchar in ['script','onload','img']:
-				if badchar in h00p.lower():
-					response = "String not allowed (script,onload,img).<br>"
-					evilflag = 1
-			if evilflag != 1:
-				response = "Hello " + h00p + "<br>"
-		return cstiPreamble + response
-
-#DEMO - Simple XSS 3
-#Goal: Invoke JavaScript through XSS within a GET parameter
-	#Create aliases for the same path
-	pages = ['XSS3','CSS3','css3']
-	@cherrypy.expose(pages)
-	def xss3(self,h00p=None,**params):
-		evilflag = 0
-		response = "Unexpected Error<br>"
-		if h00p == None:
-			response = "<br>Error: h00p is not defined<br>"
-		else:
-			for badchar in ['\'','"',' ','(',')']:
-				if badchar in h00p.lower():
-					response = "Character not allowed (',\",space,()).<br>"
-					evilflag = 1
-			if evilflag != 1:
-				response = "Hello " + h00p + "<br>"
-		return cstiPreamble + response
-
-#DEMO - SQL Injection
-#Level1 - Dump the contents of the tools database.
-	#Aliases for same path
+#SQLi {
 	pages = ['sql','sqli','store']
 	@cherrypy.expose(pages)
 	def pwndepot(self, search=None, **params):
-		tools = ["adze","allen wrench","wrench","anvil","axe","bellows","bevel","block","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench","DIY DIRTY BOMB KIT"]
-		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
-
+		#DEMO - SQL Injection
+		#Level 1 - Dump the contents of the tools database.
 		#Try to connect to DB.  If it doesn't exist, it will create it.
-		conn = sqlite3.connect('tools.db')
+		#http://127.0.0.1:31337/pwndepot2?search=saw%27%20OR%201==1%3b--
+		goal = " Goal: dump the contents of the tools table to find the secret tools."
+		sqlPreamble = getPreamble("sqli",1,"pwndepot",goal)
+		
+		conn = initialize_db('tools.db')
 		cursor = conn.cursor()
-		#Try to create tables.  Throw exception if they already exist.
-		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
-
-		#Create and populate the TOOLS Table
-		if cursor.fetchone()[0] != 1:
-			print("\n\n\nCreating table: TOOLS\n\n\n")
-			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
-				TOOL TEXT NOT NULL,
-				PRICE TEXT NOT NULL,
-				QUANTITY TEXT NOT NULL);''')
-			primarykey = 0
-			print("\n\n\nFilling table: TOOLS\n\n\n")
-			for tool in tools:
-				price = random.randint(1,301)
-				qty = random.randint(0,1001)
-				if tool == "DIY DIRTY BOMB KIT":
-					print("Adding flag! " + str(primarykey))
-					price = "YouFoundTheFlag."
-					qty = "Congrats!"
-				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "','" + str(price) + "','" + str(qty) + "')"
-				cursor.execute(statement)
-				print("Added tool with primarykey " + str(primarykey))
-				primarykey += 1
-				conn.commit()
-
-			#Now create and populate the USERS table
-			cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
-			if cursor.fetchone()[0] != 1:
-				print("\n\n\nCreating table: USERS\n\n\n")
-				cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
-					USERNAME TEXT NOT NULL,
-					PASSWORD INT NOT NULL);
-					''')
-				primarykey = 0
-				print("\n\n\nFilling table: USERS\n\n\n")
-				for user in usernames:
-					statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
-					cursor.execute(statement)
-					primarykey += 1
-					conn.commit()
-
-		sqlPreamble1 = """-->
-		    <form action="/pwndepot" method="get">
-			    <div>
-			        <label for="search">Search:</label>
-			        <input type="text" id="search" name="search">
-			        <input type="submit" value="Go">
-			    </div>
-			    <div>
-			        <br><label>Example: saw</label>
-			    </div><br><br><br>
-			</form>
-			<table class="table table-bordered" style='width:100%'>
-			    <tr align="left">
-			        <th><u>Item</u></th>
-			        <th><u>Price</u></th>
-			        <th><u>Quantity</u></th>   
-			    </tr>
-		"""
 
 		#Search function
 		if search != None:
-			print("Search is populated...")
 			response = ""
 			statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+			print(f"\nExecuting: {statement}\n")
 			cursor.execute(statement)
-			#print("Entries retrieved... " + str(len(cursor.fetchall())))
 			for i in cursor.fetchall():
 				response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
 			response += "</table></body></html>"
-			#print(response)
 		else:
 			response = ""
 
 			#Output the page
-		goal = " Goal: dump the contents of the tools table to find the secret tools."
-		return sqlPreamble + goal + sqlPreamble1 +  response
+		
+		return sqlPreamble + response
 
-#DEMO - SQL Injection 2
-#Level2 - Using a UNION attack, read the contents of another table.
-	#Aliases for same path
 	pages = ['sql2','sqli2','store2']
 	@cherrypy.expose(pages)
 	def pwndepot2(self, search=None, **params):
-		tools = ["adze","Allen","wrench","anvil","axe","bellows","bevel","block","and","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench"]
-		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
+		#DEMO - SQL Injection 2
+		#Level 2 - Using a UNION attack, read the contents of another table.
+		#http://127.0.0.1:31337/pwndepot2?search=saw%27%20UNION%20SELECT%201,2,3,4%3b--
+		goal = " Goal: find the administrator password."
+		sqlPreamble = getPreamble("sqli",2,"pwndepot2",goal)
 
-		#Try to connect to DB.  If it doesn't exist, it will create it.
-		conn = sqlite3.connect('tools.db')
+		conn = initialize_db('tools.db')
 		cursor = conn.cursor()
-		#Try to create tables.  Throw exception if they already exist.
-		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
-
-		#Create and populate the TOOLS Table
-		if cursor.fetchone()[0] != 1:
-			print("\n\n\nCreating table: TOOLS\n\n\n")
-			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
-				TOOL TEXT NOT NULL,
-				PRICE INT NOT NULL,
-				QUANTITY INT NOT NULL);''')
-			primarykey = 0
-			print("\n\n\nFilling table: TOOLS\n\n\n")
-			for tool in tools:
-				price = random.randint(1,301)
-				qty = random.randint(0,1001)
-				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "'," + str(price) + "," + str(qty) + ")"
-				cursor.execute(statement)
-				primarykey += 1
-				conn.commit()
-
-			#Now create and populate the USERS table
-			cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
-			if cursor.fetchone()[0] != 1:
-				print("\n\n\nCreating table: USERS\n\n\n")
-				cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
-					USERNAME TEXT NOT NULL,
-					PASSWORD INT NOT NULL);
-					''')
-				primarykey = 0
-				print("\n\n\nFilling table: USERS\n\n\n")
-				for user in usernames:
-					statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
-					cursor.execute(statement)
-					primarykey += 1
-					conn.commit()
-
-		sqlPreamble2 = """-->
-		    <form action="/pwndepot2" method="get">
-			    <div>
-			        <label for="search">Search:</label>
-			        <input type="text" id="search" name="search">
-			        <input type="submit" value="Go">
-			    </div>
-			    <div>
-			        <br><label>Example: saw</label>
-			    </div><br><br><br>
-			</form>
-			<table class="table table-bordered" style='width:100%'>
-			    <tr align="left">
-			        <th><u>Item</u></th>
-			        <th><u>Price</u></th>
-			        <th><u>Quantity</u></th>   
-			    </tr>
-		"""
 
 		#Search function
 		if search != None:
-			print("Search is populated...")
 			response = ""
 			statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+			print(f"\nExecuting: {statement}\n")
 			cursor.execute(statement)
-			#print("Entries retrieved... " + str(len(cursor.fetchall())))
 			for i in cursor.fetchall():
 				response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
 			response += "</table></body></html>"
-			#print(response)
 		else:
 			response = ""
 
-			#Output the page
-		goal = " Goal: find the administrator password."
-		return sqlPreamble + goal + sqlPreamble2 + response
+		return sqlPreamble + response
 
-#DEMO - SQL Injection 3
-#Level3 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
 	pages = ['sql3','sqli3','store3']
 	@cherrypy.expose(pages)
 	def pwndepot3(self, search=None, **params):
-		tools = ["adze","Allen","wrench","anvil","axe","bellows","bevel","block","and","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench"]
-		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
+		#DEMO - SQL Injection 3
+		#Filters on SQL verbs/words
+		#Level3 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
+		#http://127.0.0.1:31337/pwndepot3?search=saw%27%20UnION%20SElECT%201,2,3,4%3b--
+		goal = " Goal: bypass filters and find the administrator password."
+		sqlPreamble = getPreamble("sqli",3,"pwndepot3",goal)
 
-		#Try to connect to DB.  If it doesn't exist, it will create it.
-		conn = sqlite3.connect('tools.db')
+		conn = initialize_db('tools.db')
 		cursor = conn.cursor()
-		#Try to create tables.  Throw exception if they already exist.
-		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
-
-		#Create and populate the TOOLS Table
-		if cursor.fetchone()[0] != 1:
-			print("\n\n\nCreating table: TOOLS\n\n\n")
-			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
-				TOOL TEXT NOT NULL,
-				PRICE INT NOT NULL,
-				QUANTITY INT NOT NULL);''')
-			primarykey = 0
-			print("\n\n\nFilling table: TOOLS\n\n\n")
-			for tool in tools:
-				price = random.randint(1,301)
-				qty = random.randint(0,1001)
-				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "'," + str(price) + "," + str(qty) + ")"
-				cursor.execute(statement)
-				primarykey += 1
-				conn.commit()
-
-			#Now create and populate the USERS table
-			cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
-			if cursor.fetchone()[0] != 1:
-				print("\n\n\nCreating table: USERS\n\n\n")
-				cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
-					USERNAME TEXT NOT NULL,
-					PASSWORD INT NOT NULL);
-					''')
-				primarykey = 0
-				print("\n\n\nFilling table: USERS\n\n\n")
-				for user in usernames:
-					statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
-					cursor.execute(statement)
-					primarykey += 1
-					conn.commit()
-
-		sqlPreamble3 = """-->
-		    <form action="/pwndepot3" method="get">
-			    <div>
-			        <label for="search">Search:</label>
-			        <input type="text" id="search" name="search">
-			        <input type="submit" value="Go">
-			    </div>
-			    <div>
-			        <br><label>Example: saw</label>
-			    </div><br><br><br>
-			</form>
-			<table class="table table-bordered" style='width:100%'>
-			    <tr align="left">
-			        <th><u>Item</u></th>
-			        <th><u>Price</u></th>
-			        <th><u>Quantity</u></th>   
-			    </tr>"""
 
 		#Search function
 		evilflag = 0
@@ -643,83 +557,28 @@ class PwnDepot(object):
 					response = "Mischief detected! SQL Injection attempt logged."
 
 			if evilflag == 0:
-				print("Search is populated...")
-
 				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				print(f"\nExecuting: {statement}\n")
 				cursor.execute(statement)
 				for i in cursor.fetchall():
 					response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
 				response += "</table></body></html>"
 
 			#Output the page
-		goal = " Goal: bypass filters and find the administrator password."
-		return sqlPreamble + goal + sqlPreamble3 + response
+		
+		return sqlPreamble + response
 
-#DEMO - SQL Injection 4
-#Level4 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
 	pages = ['sql4','sqli4','store4']
 	@cherrypy.expose(pages)
 	def pwndepot4(self, search=None, **params):
-		tools = ["adze","Allen","wrench","anvil","axe","bellows","bevel","block","and","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench"]
-		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
+		#DEMO - SQL Injection 4
+		#Filters on SQL verbs and spaces
+		#Level4 - Using a UNION attack, bypass SQLi filters to read the contents of another table.
+		goal = " Goal: bypass filters and find the administrator password."
+		sqlPreamble = getPreamble("sqli",4,"pwndepot4",goal)
 
-		#Try to connect to DB.  If it doesn't exist, it will create it.
-		conn = sqlite3.connect('tools.db')
+		conn = initialize_db('tools.db')
 		cursor = conn.cursor()
-		#Try to create tables.  Throw exception if they already exist.
-		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
-
-		#Create and populate the TOOLS Table
-		if cursor.fetchone()[0] != 1:
-			print("\n\n\nCreating table: TOOLS\n\n\n")
-			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
-				TOOL TEXT NOT NULL,
-				PRICE INT NOT NULL,
-				QUANTITY INT NOT NULL);''')
-			primarykey = 0
-			print("\n\n\nFilling table: TOOLS\n\n\n")
-			for tool in tools:
-				price = random.randint(1,301)
-				qty = random.randint(0,1001)
-				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "'," + str(price) + "," + str(qty) + ")"
-				cursor.execute(statement)
-				primarykey += 1
-				conn.commit()
-
-			#Now create and populate the USERS table
-			cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
-			if cursor.fetchone()[0] != 1:
-				print("\n\n\nCreating table: USERS\n\n\n")
-				cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
-					USERNAME TEXT NOT NULL,
-					PASSWORD INT NOT NULL);
-					''')
-				primarykey = 0
-				print("\n\n\nFilling table: USERS\n\n\n")
-				for user in usernames:
-					statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
-					cursor.execute(statement)
-					primarykey += 1
-					conn.commit()
-
-		sqlPreamble4 = """-->
-		<form action="/pwndepot4" method="get">
-    		<div>
-        		<label for="search">Search:</label>
-        		<input type="text" id="search" name="search">
-        		<input type="submit" value="Go">
-    		</div>
-    		<div>
-        		<br><label>Example: saw</label>
-    		</div><br><br><br>
-		</form>
-		<table class="table table-bordered" style='width:100%'>
-    		<tr align="left">
-        		<th><u>Item</u></th>
-        		<th><u>Price</u></th>
-        		<th><u>Quantity</u></th>   
-    		</tr>
-		"""
 
 		#Search function
 		evilflag = 0
@@ -738,14 +597,60 @@ class PwnDepot(object):
 				print("Search is populated...")
 
 				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				print(f"\nExecuting: {statement}\n")
 				cursor.execute(statement)
 				for i in cursor.fetchall():
 					response += "<tr align='left'>\n\t<td id='tool'>" + str(i[1]) + "</td>\n\t<td id='price'>$" + str(i[3]) + "</td>\n\t<td id='quantity'>" + str(i[2]) + "</td>\n</tr>"
 				response += "</table></body></html>"
 
 			#Output the page
-		goal = " Goal: bypass filters and find the administrator password."
-		return sqlPreamble + goal + sqlPreamble4 + response
+		return sqlPreamble + response
+#}
+
+#Command Injection {
+	pages = ['cmdi','serverstatus','commandinjection','osinjection']
+	@cherrypy.expose(pages)
+	def serverstatus(self,server=None, **params):
+		#http://127.0.0.1:31337/serverstatus?server=127.0.0.1%26%26whoami
+		prompt = "Which server would you like to check?"
+		cmdiPreamble = getPreamble("cmdi",1,prompt)
+		response = "No servers selected.<br>"
+		if server:
+			p = subprocess.Popen(["ping","-n","2",server],shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			stdout, stderr = p.communicate()
+			retcode = p.returncode
+			response = f"You provided {server}<br>"
+			result = stdout.decode().replace("\n","</br>")
+			response += result
+			if "Ping request could not find" in result:
+				response += f"The server at {server} is DOWN."
+		return cmdiPreamble + response
+
+	pages = ['cmdi2','serverstatus2','commandinjection2','osinjection2']
+	@cherrypy.expose(pages)
+	def serverstatus2(self,server=None, **params):
+		#http://127.0.0.1:31337/serverstatus2?server=127.0.0.1|whoami
+		prompt = "Which server would you like to check? Now with increased security!"
+		cmdiPreamble = getPreamble("cmdi",1,prompt)
+		
+		evilflag = 0
+		response = "No servers selected.<br>"
+		if server:
+			if "&" in server or ";" in server:
+				evilflag = 1
+				response += "<h2>No hacking allowed!</h2>"
+			else:
+				p = subprocess.Popen(["ping","-n","2",server],shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+				stdout, stderr = p.communicate()
+				retcode = p.returncode
+				response = f"You provided {server}<br>"
+				if retcode == 0:
+					result = stdout.decode().replace("\n","</br>")
+					response += result
+				else:
+					response = f"The server at {server} is DOWN."
+		return cmdiPreamble + response
+#}
 
 	@cherrypy.expose('shutdown')
 	def shutdown(self):  
