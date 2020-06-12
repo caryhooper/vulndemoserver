@@ -5,8 +5,9 @@ This program is a standalone web server hosting apps vulnerable to a number of c
 ** Current Modules **
 - XSS (HTML injection, filter bypass, AngularJS injection)
 - SQL Injection (basic, UNION attack, filter bypass)
-- SSRF (PDF generation)
+- SSRF (PDF generation with wkhtmltopdf,weasyprint,headless Chrome)
 - Weak Cryptography (AES ECB information leak)
+- Command Injection 
 
 ## Getting Started
 
@@ -38,4 +39,3 @@ This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.t
 
 * Thanks to Andy Acer for introducing me to CherryPy.
 * Special thanks to friends and colleagues who helped me test.  
-
