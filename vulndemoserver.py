@@ -20,6 +20,15 @@ port = 31337
 #To bind on all ports, change this to: socket_host = "0.0.0.0" #AKA the "I like to live dangerously" option
 socket_host = "127.0.0.1"
 
+#This will enable SSL support!  Please generate your own certificate if using over the network.
+cherrypy.config.update({
+	'server.socket.module' : 'builtin',
+	'server.socket.ssl_certificate': 'keys\\cert.pem',
+	'server.socket.ssl_private_key': 'privkey.pem'
+	})
+
+
+
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
 	'/' : 
