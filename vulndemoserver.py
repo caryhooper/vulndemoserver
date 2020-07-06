@@ -20,7 +20,7 @@ else:
 PATH = os.path.abspath(webroot)
 port = 31337
 #To bind on all ports, change this to: socket_host = "0.0.0.0" #AKA the "I like to live dangerously" option
-socket_host = "127.0.0.1"
+socket_host = "0.0.0.0"
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
@@ -416,9 +416,13 @@ class PwnDepot(object):
 				pdfname = "test.pdf"
 			
 			#CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
-			
+			CHROME_PATH = "/usr/bin/google-chrome"
+
 			tempname = filename.split('.')[0] + '.html'
-			pdfpath = "C:\\Users\\Cary\\Documents\\Projects\\vulndemoserver\\wwwroot\\pdf\\"
+			if isWindows:
+				pdfpath = f"{PATH}\\pdf\\"
+			else:
+				pdfpath = f"{PATH}/pdf/"
 			file = open(f"{pdfpath}{tempname}",'w+')
 			print(f"DEBUG - Writing {html} to file {pdfpath}{tempname}")
 			file.write(html)
@@ -643,7 +647,11 @@ class PwnDepot(object):
 				evilflag = 1
 				response += "<h2>No hacking allowed!</h2>"
 			else:
-				p = subprocess.Popen(["ping","-n","2",server],shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+				if isWindows:
+					flag = "n"
+				else:
+					flag = "c"
+				p = subprocess.Popen(["ping",f"-{flag}","2",server],shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 				stdout, stderr = p.communicate()
 				retcode = p.returncode
 				response = f"You provided {server}<br>"
