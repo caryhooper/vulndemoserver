@@ -13,21 +13,14 @@ import time
 log_file_path = ''
 if os.name == 'nt':
 	webroot = 'wwwroot\\'
+	isWindows = True
 else:
 	webroot = 'wwwroot/'
+	isWindows = False
 PATH = os.path.abspath(webroot)
 port = 31337
 #To bind on all ports, change this to: socket_host = "0.0.0.0" #AKA the "I like to live dangerously" option
 socket_host = "127.0.0.1"
-
-#This will enable SSL support!  Please generate your own certificate if using over the network.
-cherrypy.config.update({
-	'server.socket.module' : 'builtin',
-	'server.socket.ssl_certificate': 'keys\\cert.pem',
-	'server.socket.ssl_private_key': 'privkey.pem'
-	})
-
-
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
@@ -351,10 +344,10 @@ class PwnDepot(object):
 			response = getPreamble("ssrf",1,extra="pdfgen",technology="wkhtmltopdf")
 		else:
 			#Output link to PDF.
-			if (os.path.isdir("wwwroot/pdf")):
+			if (os.path.isdir(PATH + "/pdf")):
 				print("pdf directory exists.  ")
 			else:
-				os.mkdir('wwwroot/pdf')
+				os.mkdir(PATH + '\\pdf')
 			if filename != None:
 				if ".pdf" in filename:
 					pdfname = filename
@@ -362,7 +355,7 @@ class PwnDepot(object):
 					pdfname  = filename + ".pdf"
 			else:
 				pdfname = "test.pdf"
-			pdfkit.from_string(html,"wwwroot/pdf/" + pdfname)
+			pdfkit.from_string(html,f"{PATH}/pdf/{pdfname}")
 			response = "<html><body>Please view your PDF at this <a href=\"pdf/"+pdfname+"\">link.</a></body></html>"
 		return response
 
@@ -393,7 +386,7 @@ class PwnDepot(object):
 			else:
 				pdfname = "test.pdf"
 			html = HTML(string=html)
-			html.write_pdf("wwwroot/pdf/" + pdfname)
+			html.write_pdf(f"{PATH}/pdf/{pdfname}")
 			response = f"<html><body>Please view your PDF at this <a href=\"pdf/{pdfname}\">link.</a></body></html>"
 		return response
 
@@ -410,10 +403,10 @@ class PwnDepot(object):
 			response = getPreamble("ssrf",3,"pdfgen","Headless Chrome")
 		else:
 			#Output link to PDF.
-			if (os.path.isdir("wwwroot/pdf")):
+			if (os.path.isdir(f"{PATH}/pdf")):
 				pass
 			else:
-				os.mkdir('wwwroot/pdf')
+				os.mkdir(f'{PATH}/pdf')
 			if filename != None:
 				if ".pdf" in filename:
 					pdfname = filename
@@ -422,7 +415,8 @@ class PwnDepot(object):
 			else:
 				pdfname = "test.pdf"
 			
-			CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
+			#CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
+			
 			tempname = filename.split('.')[0] + '.html'
 			pdfpath = "C:\\Users\\Cary\\Documents\\Projects\\vulndemoserver\\wwwroot\\pdf\\"
 			file = open(f"{pdfpath}{tempname}",'w+')
