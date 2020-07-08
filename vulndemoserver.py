@@ -337,7 +337,8 @@ class PwnDepot(object):
 	def ssrf(self,html=None,filename=None,**params):
 		#DEMO - SSRF 1 
 		#Goal: abuse the PDF generation functionality to forge a HTTP request from the server
-		#Note: this module requires wkhtmltopdf.  Install with pip
+		#Note: this module requires wkhtmltopdf.  Install with pip and
+		#apt-get install wkhtmltopdf
 		#<iframe src="http://j8ss5y0ayf4502ssu8zlbosip9vzjo.burpcollaborator.net" width="500px" height="500px"></iframe>
 		if html == None:
 			#Input HTML (POST)
@@ -347,7 +348,11 @@ class PwnDepot(object):
 			if (os.path.isdir(PATH + "/pdf")):
 				print("pdf directory exists.  ")
 			else:
-				os.mkdir(PATH + '\\pdf')
+				if isWindows:
+					os.mkdir(PATH + '\\pdf')
+				else:
+					os.mkdir(PATH + '/pdf')
+
 			if filename != None:
 				if ".pdf" in filename:
 					pdfname = filename
@@ -371,7 +376,7 @@ class PwnDepot(object):
 		#Need to fix <a href="file://c:/TEMP/admin.log" rel="attachment">harmless link</a>
 		if html == None:
 			#Input HTML (POST)
-			response = getPreamble("ssrf",2,"pdfgen","WeasyPrint")
+			response = getPreamble("ssrf",2,"pdfgen2","WeasyPrint")
 		else:
 			#Output link to PDF.
 			if (os.path.isdir("wwwroot/pdf")):
@@ -400,7 +405,7 @@ class PwnDepot(object):
 		#<h1>inject</h1><script>document.write(123)</script>
 		if html == None:
 			#Input HTML (POST)
-			response = getPreamble("ssrf",3,"pdfgen","Headless Chrome")
+			response = getPreamble("ssrf",3,"pdfgen3","Headless Chrome")
 		else:
 			#Output link to PDF.
 			if (os.path.isdir(f"{PATH}/pdf")):
@@ -414,9 +419,11 @@ class PwnDepot(object):
 					pdfname  = filename + ".pdf"
 			else:
 				pdfname = "test.pdf"
-			
-			#CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
-			CHROME_PATH = "/usr/bin/google-chrome"
+
+			if isWindows:
+				CHROME_PATH = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" 
+			else:
+				CHROME_PATH = "/usr/bin/google-chrome-stable"
 
 			tempname = filename.split('.')[0] + '.html'
 			if isWindows:
@@ -428,7 +435,7 @@ class PwnDepot(object):
 			file.write(html)
 			file.close()
 			#"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --print-to-pdf="C:\Temp\a.pdf" --no-margins file:///C:/Users/Cary/Documents/Programming/Python/vulndemoserver/wwwroot/pdf/foobar.html
-			execarray = [CHROME_PATH, "--headless", "--disable-gpu", f"--print-to-pdf={pdfpath}{pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			execarray = [CHROME_PATH, "--headless", "--disable-gpu", "--no-sandbox", "--user-data-dir",f"--print-to-pdf={pdfpath}{pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
 			p = subprocess.Popen(execarray,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			#DEBUG Purposes Only
 			stdout, stderr = p.communicate()
@@ -436,8 +443,8 @@ class PwnDepot(object):
 			if retcode != 0:
 				foo = f"DEBUG - stderr {stderr}"
 				bar = f"DEBUG - stdout {stdout}"
-				return foo + "<br><br>" + bar
-			print(f"DEBUG - returncode {retcode}")
+				response += foo + "<br><br>" + bar + "<br><br>"
+				response += f"DEBUG - returncode {retcode}")
 			time.sleep(2)
 			response = f"<html><body>Please view your PDF at this <a href=\"pdf/{pdfname}\">link.</a></body></html>"
 		return response
@@ -594,8 +601,10 @@ class PwnDepot(object):
 		if search != None:
 			for evilword in evilwords:
 				if evilword in search.lower():
+					for word in evilwords:
+						search.replace(word,"")
 					evilflag = 1
-					response = "Mischief detected! Illegal word."
+					response = "Mischief detected! Illegal words have been removed."
 				if " " in search.lower():
 					evilflag = 1
 					response = "Mischief detected! Illegal character."
