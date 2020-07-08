@@ -10,5 +10,5 @@ EXPOSE 31337
 RUN git clone https://github.com/caryhooper/vulndemoserver
 WORKDIR /vulndemoserver
 RUN pip3 install -r requirements.txt
-CMD ["sudo","-u","vds","python3", "/vulndemoserver/vulndemoserver.py"]
+CMD ["python3", "/vulndemoserver/vulndemoserver.py"]
 
