@@ -444,7 +444,7 @@ class PwnDepot(object):
 				foo = f"DEBUG - stderr {stderr}"
 				bar = f"DEBUG - stdout {stdout}"
 				response += foo + "<br><br>" + bar + "<br><br>"
-				response += f"DEBUG - returncode {retcode}")
+				response += f"DEBUG - returncode {retcode}"
 			time.sleep(2)
 			response = f"<html><body>Please view your PDF at this <a href=\"pdf/{pdfname}\">link.</a></body></html>"
 		return response
