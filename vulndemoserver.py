@@ -408,6 +408,7 @@ class PwnDepot(object):
 			response = getPreamble("ssrf",3,"pdfgen3","Headless Chrome")
 		else:
 			#Output link to PDF.
+			response = ""
 			if (os.path.isdir(f"{PATH}/pdf")):
 				pass
 			else:
@@ -435,7 +436,11 @@ class PwnDepot(object):
 			file.write(html)
 			file.close()
 			#"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --headless --disable-gpu --print-to-pdf="C:\Temp\a.pdf" --no-margins file:///C:/Users/Cary/Documents/Programming/Python/vulndemoserver/wwwroot/pdf/foobar.html
-			execarray = [CHROME_PATH, "--headless", "--disable-gpu", "--no-sandbox", "--user-data-dir",f"--print-to-pdf={pdfpath}{pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			if isWindows:
+				execarray = [CHROME_PATH, "--headless", "--disable-gpu", "--no-sandbox", "--user-data-dir",f"--print-to-pdf={pdfpath}{pdfname}", "--no-margins", f"file:///{pdfpath}{tempname}"]
+			else:
+				execarray = [f"{CHROME_PATH} --headless --disable-gpu --no-sandbox --user-data-dir --print-to-pdf={pdfpath}{pdfname} --no-margins file:///{pdfpath}{tempname}"]
+
 			p = subprocess.Popen(execarray,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			#DEBUG Purposes Only
 			stdout, stderr = p.communicate()
