@@ -21,6 +21,10 @@ PATH = os.path.abspath(webroot)
 port = 31337
 #To bind on all ports, change this to: socket_host = "0.0.0.0" #AKA the "I like to live dangerously" option
 socket_host = "0.0.0.0"
+#Change the SQL flavor here (to be used in conjunction with MSSQL server docker container):
+#For , see comments in create_connection_DBMS():
+#DBMS = "sqlite3"
+DBMS = "mssql"
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
@@ -55,7 +59,7 @@ def secureheaders():
 	headers["Access-Control-Allow-Origin"] = "*"
 	headers["X-Haiku"] = "CherryPy is fun, but difficult to work with.  This is a haiku."
 	cookie = cherrypy.response.cookie
-	cookie["Cookie"] = base64.b64encode(b"Here, have a cookie!")
+	cookie["Cookie"] = base64.b64encode(b"Here, have a cookie!").decode()
 
 #Log File Settings
 cherrypy.config.update({
@@ -67,8 +71,23 @@ cherrypy.config.update({
 	'log.screen' : True
 	})
 
-def create_connection(db_file):
+def create_connection_mssql():
+	#docker pull mcr.microsoft.com/mssql/server
+	#docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Password123' -p 1433:1433 -d mcr.microsoft.com/mssql/server	
+	#Note... need to create database pwndepot
+	#CREATE DATABASE pwndepot
+	print("Connecting to MSSQL")
+	import pyodbc
+	cxnstring = f'DRIVER={{FreeTDS}};SERVER=127.0.0.1;PORT=1433;UID=sa;PWD=Password123'
+	conn = pyodbc.connect(cxnstring)
+	cursor = conn.cursor()
+	# cursor.execute("CREATE DATABASE pwndepot")
+	# cursor.execute("USE pwndepot")
+	return conn
+
+def create_connection_sqlite3(db_file):
 	#Connect to sqlite db
+	print("Connecting to sqlite3")
 	try:
 		conn = sqlite3.connect(db_file)
 		print(sqlite3.version)
@@ -79,49 +98,112 @@ def create_connection(db_file):
 def initialize_db(db_file):
 	#Creates the sqlite3 database if it does not exist already).
 	#Try to create tables.  Throw exception if they already exist.
-	conn = create_connection(db_file)
-	cursor = conn.cursor()
-	cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'")
-	#Create and populate the TOOLS Table
-	if cursor.fetchone()[0] != 1:
-		print("\n\n\nCreating table: TOOLS\n\n\n")
+	tools = ["adze","allen wrench","wrench","anvil","axe","bellows","bevel","block","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench","DIY DIRTY BOMB KIT"]
+	usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
 
-		tools = ["adze","allen wrench","wrench","anvil","axe","bellows","bevel","block","tackle","block","plane","bolt","bolt","cutter","brad","brush","calipers","carpenter","chalk","line","chisel","circular","saw","clamp","clippers","coping","countersink","crowbar","cutters","drill","drill","bit","drill","press","edger","electric","drill","fastener","glass","cutter","glue","glue","gun","grinder","hacksaw","hammer","handsaw","hex","wrench","hoe","hone","jig","jigsaw","knife","ladder","lathe","level","lever","machete","mallet","measuring","tape","miter","box","monkey","wrench","nail","nail","set","needle-nose","pliers","nut","Phillips","screwdriver","pickaxe","pin","pincer","pinch","pitchfork","plane","pliers","plow","plumb","bob","poker","pruning","shears","pry","bar","pulley","putty","knife","rasp","ratchet","razor","reamer","rivet","roller","rope","router","ruler","safety","glasses","sand","paper","sander","saw","sawhorse","scalpel","scissors","scraper","screw","screwdriver","scythe","sharpener","shovel","sickle","snips","spade","spear","sponge","square","squeegee","staple","stapler","tack","tiller","tongs","toolbox","toolmaker","torch","trowel","utility","knife","vise","wedge","wheel","woodworker","workbench","wrench","DIY DIRTY BOMB KIT"]
-		usernames = {'guest':'guest','h00p':'H4ckD@P1aN3t4theW1N','administrator':'iamthesystemadministrator'}
-		cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
+	#Create Connection
+	if DBMS == "sqlite3":
+		conn = create_connection_sqlite3(db_file)
+	else:
+		conn = create_connection_mssql()
+	
+	#Create tools table
+	cursor = conn.cursor()
+	if DBMS == "sqlite3":
+		query = "SELECT count(name) FROM sqlite_master WHERE type='table' AND name='TOOLS'"
+	else:
+		query = "SELECT COUNT(*) FROM pwndepot..sysobjects WHERE xtype = 'U' and name = 'tools'"
+	cursor.execute(query)
+	result = cursor.fetchone()[0]
+	#print(f"Create tools table {result}")
+
+	#Create tools if a table doesn't exist
+	if result != 1:
+		print("\n\n\nCreating table: TOOLS\n\n\n")
+		
+		if DBMS == "sqlite3":
+			cursor.execute('''CREATE TABLE TOOLS (ID INT PRIMARY KEY NOT NULL,
 			TOOL TEXT NOT NULL,
 			PRICE TEXT NOT NULL,
 			QUANTITY TEXT NOT NULL);''')
+		else:
+			#CREATE TABLE pwndepot..tools (tool_id INT PRIMARY KEY,name VARCHAR (50) NOT NULL,price VARCHAR (50) NOT NULL,quantity VARCHAR (50) NOT NULL);
+			cursor.execute('''CREATE TABLE pwndepot..tools (
+				tool_id INT PRIMARY KEY,
+				name VARCHAR (50) NOT NULL,
+				price VARCHAR (50) NOT NULL,
+				quantity VARCHAR (50) NOT NULL);''')
+	
+	#Is the tools table populated?
+	if DBMS == "sqlite3":
+		query = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='TOOLS'"
+	else:
+		query = "SELECT COUNT(*) FROM pwndepot..tools"
+	cursor.execute(query)
+	result = cursor.fetchone()[0]
+	#print(f"Populate tools table {result}")
+
+	#If not, populate tools
+	if result < 1:
 		primarykey = 0
 		print("\n\n\nFilling table: TOOLS\n\n\n")
 		for tool in tools:
 			price = random.randint(1,301)
 			qty = random.randint(0,1001)
 			if tool == "DIY DIRTY BOMB KIT":
-				print("Adding flag! " + str(primarykey))
+				print(f"Adding flag! {str(primarykey)}")
 				price = "YouFoundTheFlag."
 				qty = "Congrats!"
-			statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "','" + str(price) + "','" + str(qty) + "')"
+			if DBMS == "sqlite3":
+				statement = "INSERT INTO TOOLS (ID,TOOL,PRICE,QUANTITY) VALUES (" + str(primarykey) + ",'" + tool + "','" + str(price) + "','" + str(qty) + "')"
+			else:
+				statement = f"INSERT INTO pwndepot..tools (tool_id,name,price,quantity) VALUES ({primarykey},'{tool}','{price}','{qty}')"
 			cursor.execute(statement)
 			print("Added tool with primarykey " + str(primarykey))
 			primarykey += 1
 			conn.commit()
 
-		#Now create and populate the USERS table
-		cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'")
-		if cursor.fetchone()[0] != 1:
-			print("\n\n\nCreating table: USERS\n\n\n")
+	#Now create and populate the USERS table
+	if DBMS == "sqlite3":
+		query = "SELECT count(name) FROM sqlite_master WHERE type='table' AND name='USERS'"
+	else:
+		query = "SELECT COUNT(*) FROM pwndepot..sysobjects WHERE xtype = 'U' and name = 'users'"
+	cursor.execute(query)
+	result = cursor.fetchone()[0]
+	#print(f"Create users table {result}")
+
+	if result == 0:
+		print("\n\n\nCreating table: USERS\n\n\n")
+		if DBMS == "sqlite3":
 			cursor.execute('''CREATE TABLE USERS (ID INT PRIMARY KEY NOT NULL,
-				USERNAME TEXT NOT NULL,
-				PASSWORD INT NOT NULL);
-				''')
-			primarykey = 0
-			print("\n\n\nFilling table: USERS\n\n\n")
-			for user in usernames:
-				statement = "INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES (" + str(primarykey) + ",'" + user + "','" + usernames[user] + "')"
-				cursor.execute(statement)
-				primarykey += 1
-				conn.commit()
+			USERNAME TEXT NOT NULL,
+			PASSWORD INT NOT NULL)''')
+		else:
+			#CREATE TABLE pwndepot..users (user_id INT PRIMARY KEY,username VARCHAR (50) NOT NULL,password VARCHAR (50) NOT NULL);
+			cursor.execute('''CREATE TABLE pwndepot..users (
+				user_id INT PRIMARY KEY,
+				username VARCHAR (50) NOT NULL,
+				password VARCHAR (50) NOT NULL)''')
+	
+	if DBMS == "sqlite3":
+		query = "SELECT count(*) FROM USERS"
+	else:
+		query = "SELECT COUNT(*) FROM pwndepot..tools"
+	cursor.execute(query)
+	result = cursor.fetchone()[0]
+	#print(f"Populate users table {result}")
+
+	if result < 1:
+		primarykey = 0
+		print("\n\n\nFilling table: USERS\n\n\n")
+		for user in usernames:
+			if DBMS == "sqlite3":
+				statement = f"INSERT INTO USERS (ID,USERNAME,PASSWORD) VALUES ({primarykey},'{user}','{usernames[user]}')"
+			else:
+				statement = f"INSERT INTO pwndepot..users (user_id,username,password) VALUES ({primarykey},'{user}','{usernames[user]}')"
+			cursor.execute(statement)
+			primarykey += 1
+			conn.commit()
 	return conn
 
 def getPreamble(attack,level,extra="",technology=""):
@@ -513,7 +595,10 @@ class PwnDepot(object):
 		#Search function
 		if search != None:
 			response = ""
-			statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+			if DBMS == "sqlite3":
+				statement = f"SELECT * FROM TOOLS WHERE TOOL LIKE '%{search}%' LIMIT 5;"
+			else:
+				statement = f"SELECT TOP 5 * FROM pwndepot..tools WHERE name LIKE '%{search}%'"
 			print(f"\nExecuting: {statement}\n")
 			cursor.execute(statement)
 			for i in cursor.fetchall():
@@ -541,7 +626,10 @@ class PwnDepot(object):
 		#Search function
 		if search != None:
 			response = ""
-			statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+			if DBMS == "sqlite3":
+				statement = f"SELECT * FROM TOOLS WHERE TOOL LIKE '%{search}%' LIMIT 5;"
+			else:
+				statement = f"SELECT TOP 5 * FROM pwndepot..tools WHERE name LIKE '%{search}%'"
 			print(f"\nExecuting: {statement}\n")
 			cursor.execute(statement)
 			for i in cursor.fetchall():
@@ -576,7 +664,10 @@ class PwnDepot(object):
 					response = "Mischief detected! SQL Injection attempt logged."
 
 			if evilflag == 0:
-				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				if DBMS == "sqlite3":
+					statement = f"SELECT * FROM TOOLS WHERE TOOL LIKE '%{search}%' LIMIT 5;"
+				else:
+					statement = f"SELECT TOP 5 * FROM pwndepot..tools WHERE name LIKE '%{search}%'"
 				print(f"\nExecuting: {statement}\n")
 				cursor.execute(statement)
 				for i in cursor.fetchall():
@@ -617,7 +708,10 @@ class PwnDepot(object):
 			if evilflag == 0:
 				print("Search is populated...")
 
-				statement = "SELECT * FROM TOOLS WHERE TOOL LIKE '%" + search + "%' LIMIT 5;"
+				if DBMS == "sqlite3":
+					statement = f"SELECT * FROM TOOLS WHERE TOOL LIKE '%{search}%' LIMIT 5;"
+				else:
+					statement = f"SELECT TOP 5 * FROM pwndepot..tools WHERE name LIKE '%{search}%'"
 				print(f"\nExecuting: {statement}\n")
 				cursor.execute(statement)
 				for i in cursor.fetchall():
@@ -637,7 +731,11 @@ class PwnDepot(object):
 		cmdiPreamble = getPreamble("cmdi",1,prompt)
 		response = "No servers selected.<br>"
 		if server:
-			p = subprocess.Popen(["ping","-n","2",server],shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			if isWindows:
+				execstring = ["ping","-n","2",server]
+			else:
+				execstring = [f"ping -c 2 {server}"]
+			p = subprocess.Popen(execstring,shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			stdout, stderr = p.communicate()
 			retcode = p.returncode
 			response = f"You provided {server}<br>"
