@@ -23,8 +23,8 @@ port = 31337
 socket_host = "0.0.0.0"
 #Change the SQL flavor here (to be used in conjunction with MSSQL server docker container):
 #For , see comments in create_connection_DBMS():
-#DBMS = "sqlite3"
-DBMS = "mssql"
+DBMS = "sqlite3"
+#DBMS = "mssql"
 
 #To use these, you'll need a file 'index.html' and 'favicon.ico' within the webroot.
 configval = {
