@@ -136,7 +136,7 @@ def initialize_db(db_file):
 	
 	#Is the tools table populated?
 	if DBMS == "sqlite3":
-		query = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='TOOLS'"
+		query = "SELECT count(*) FROM tools"
 	else:
 		query = "SELECT COUNT(*) FROM pwndepot..tools"
 	cursor.execute(query)
