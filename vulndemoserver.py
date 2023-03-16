@@ -34,7 +34,10 @@ configval = {
 		'tools.staticdir.dir' : PATH,
 		'tools.staticdir.index' : 'index.html',
 		'tools.caching.on' : False,
-		'tools.secureheaders.on' : True
+		'tools.secureheaders.on' : True,
+		},
+	'global':{
+		'server.wsgi_version': ('u',0)
 		}
 	}
 
@@ -68,7 +71,8 @@ cherrypy.config.update({
 	'request.show_tracebacks' : False,
 	'log.access_file' : log_file_path + "access.log",
 	'log.error_file' : log_file_path + "error.log",
-	'log.screen' : True
+	'log.screen' : True,
+
 	})
 
 def create_connection_mssql():
@@ -284,6 +288,38 @@ def getPreamble(attack,level,extra="",technology=""):
 				    </div><br>
 				</form>"""
 		return weakCryptoPreamble
+	if attack == "hla":
+		hla_preamble = f"""<!DOCTYPE html>
+			<html>
+			<head><title>Hash Length Extension Demo</title></head>
+			<body bgcolor="#e0dcdc">
+			    <br><br>
+			    <h1>PWN Depot File Server</h1>
+			    <h3>Our system only serves intended files.  These are protected with the SHA1 hash</br> 
+			    of the filename with a secret in front.  The secret is unguessable, keeping our customer</br>
+			    data safe with crypto(graphy). The smartest scientists in the world invented this stuff, right? </br>
+			    </h3>
+			   	<div align="left"><br><a href="/index.html">Go back to index.html</a><br></div>
+			    <img src="../pwndepot.png" height="10%" width="10%">
+
+				<form action="/crypto2" method="get">
+				    <div>
+				        <label for="filename">Enter the filename:</label>
+				        <input type="text" name="name"></br>
+				        <label for="hash">Enter the token:</label>
+				        <input type="text" name="hash_value"></br>
+				        <input type="submit" value="Go">
+				    </div></br></br>
+				</form>
+				</br>
+				<h2>Available Files</h2>
+				<a href="/crypto2?filename=favicon.ico&hash_val=c8dde30efbe2ef03c5c1d5d46999805d3542b77e">favicon.ico</a></br>
+				<a href="/crypto2?filename=pwndepot.png&hash_val=be782601c6a8e34e03bfb600ce424c40aa014eb7">pwndepot.png</a></br>
+				<a href="/crypto2?filename=index.html&hash_val=7133f695f87652acd3a6063126efec269de9504d">index.html</a></br>
+				
+				"""
+		return hla_preamble
+
 	if attack == "cmdi":
 		cmdiPreamble = f"""<!DOCTYPE html>
 			<html>
@@ -576,6 +612,51 @@ class PwnDepot(object):
 			ciphertext = do_encrypt(name)
 			response += ciphertext
 		return weakCryptoPreamble + response + "</code></b><h3></body></html>"
+
+	pages = ['hash_length_extension','hla','crypto2']
+	@cherrypy.expose(pages)
+	def length_extension(self,filename=None,hash_val=None,**params):
+		#DEMO - SHA1 Hash Length Extension Attack
+		hla_preamble = getPreamble("hla",1)
+		hla_preamble += '<h1>CURRENTLY INOP (may not be possible to exploit with CherryPy</h1>'
+		secret = b"The PWN Depot Center for Skids Who Can't Hack Crypto Good and Wanna Learn to Do Other Hacks Good Too"
+
+		if filename != None and hash_val != None:
+			#Check if hash matches secret+filename
+			import hashlib
+			hasher = hashlib.new('sha1')
+			hasher.update(secret + filename.encode())
+			valid_hash = hasher.hexdigest()
+			print(f"Actual hash of {filename} is {valid_hash}.")
+			if valid_hash == hash_val:
+				#Return File
+				try:		
+					#Sanitize filename from non-ascii characters
+					new_filename = ""
+					import string
+					for character in filename:
+						if character in string.printable:
+							new_filename += character
+					filename = new_filename
+
+					file_to_open = webroot + filename	
+					print(f"Trying to open {file_to_open}")	
+					with open(file_to_open,'rb') as file:
+						content = file.read()
+						content = content.decode('latin-1')
+						hla_preamble += f'<h3>{filename}</h3></br><textarea disabled height="700px" width="75%">{content}</textarea>'
+						hla_preamble += '<style>textarea {width: 75%; height: 200px}</style>' 
+				except Exception as e:
+					print(e)
+					hla_preamble = '<h3>Error: filename not found (404)</h3>'
+			else:
+				#Give Error message
+				error_message = '<h3>Error: provided hash_val is not associated with the filename (403).</h3>'
+				hla_preamble += error_message
+
+		return hla_preamble
+
+
 #}
 
 #SQLi {
